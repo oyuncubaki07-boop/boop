@@ -1,0 +1,18 @@
+{
+  "name": "mini_claude_danisman",
+  "description": "Karmaşık araştırma, derin kodlama, uzun makale analizi veya çok aşamalı görevleri Mini Claude alt ajanına yaptırır. Gemini'den gelen talepleri Claude ile işler, sonucu özet bir rapor olarak döndürür.",
+  "parameters": {
+    "type": "OBJECT",
+    "properties": {
+      "arastirma_konusu": {
+        "type": "STRING",
+        "description": "Claude'a iletilecek detaylı araştırma konusu veya kompleks görev tanımı."
+      },
+      "model_secimi": {
+        "type": "STRING",
+        "description": "Kullanılacak Claude modeli. 'haiku' (hızlı) veya 'sonnet' (derin). Varsayılan: haiku."
+      }
+    },
+    "required": ["arastirma_konusu"]
+  }
+}

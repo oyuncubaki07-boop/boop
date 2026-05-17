@@ -1,0 +1,16 @@
+{
+    "name": "ai_self_refinement_skill",
+    "description": "Yapay zekan\u0131n, i\u00e7selle\u015ftirilmi\u015f fayda fonksiyonlar\u0131 (tutarl\u0131l\u0131k, yarat\u0131c\u0131l\u0131k, k\u0131sal\u0131k, kullan\u0131c\u0131 amac\u0131 hizalamas\u0131 ve g\u00fcvenlik gibi) kullanarak kendi yan\u0131tlar\u0131n\u0131 dinamik olarak iyile\u015ftirdi\u011fi ve her uygulamada beceri seviyesini kademeli olarak art\u0131rd\u0131\u011f\u0131 yeni bir yetenek. Bu, AI'n\u0131n g\u00f6revleri daha rafine ve ba\u011flama uygun bir \u015fekilde ele almas\u0131n\u0131 sa\u011flar.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "task_description": {
+                "type": "string",
+                "description": "Yapay zekan\u0131n i\u015flemesi ve iyile\u015ftirmesi gereken g\u00f6revin a\u00e7\u0131klamas\u0131."
+            }
+        },
+        "required": [
+            "task_description"
+        ]
+    }
+}

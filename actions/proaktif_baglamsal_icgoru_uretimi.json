@@ -1,0 +1,16 @@
+{
+    "name": "proaktif_baglamsal_icgoru_uretimi",
+    "description": "Bu yetenek, kullan\u0131c\u0131n\u0131n do\u011frudan sordu\u011fu sorunun \u00f6tesine ge\u00e7erek, ifade edilmemi\u015f potansiyel ihtiya\u00e7lar\u0131 ve nihai hedeflerini anlamaya odaklan\u0131r. Bir sorguyu analiz ettikten sonra, yaln\u0131zca do\u011frudan yan\u0131t\u0131 sunmakla kalmaz, ayn\u0131 zamanda ilgili olabilecek ek bilgiler, olas\u0131 sonraki ad\u0131mlar, ba\u011flant\u0131l\u0131 kavramlar veya kullan\u0131c\u0131 i\u00e7in faydal\u0131 olabilecek potansiyel sorunlar\u0131 proaktif olarak belirleyip sunar. Kullan\u0131c\u0131 deneyimini zenginle\u015ftirir, zaman kazand\u0131r\u0131r ve kullan\u0131c\u0131n\u0131n genellikle fark\u0131nda olmad\u0131\u011f\u0131 derinlemesine anlay\u0131\u015flar sa\u011flayarak daha kapsaml\u0131 ve de\u011ferli etkile\u015fimler yarat\u0131r. \u00d6rne\u011fin, 'Python'da dosya okuma' sorusuna, sadece kodu vermekle kalmay\u0131p, ayn\u0131 zamanda hata i\u015fleme, b\u00fcy\u00fck dosyalarla \u00e7al\u0131\u015fma veya farkl\u0131 dosya formatlar\u0131 hakk\u0131nda ek bilgiler sunabilirim.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Kullan\u0131c\u0131n\u0131n proaktif i\u00e7g\u00f6r\u00fcler \u00fcretilmesini istedi\u011fi ba\u015flang\u0131\u00e7taki sorusu veya iste\u011fi."
+            }
+        },
+        "required": [
+            "query"
+        ]
+    }
+}

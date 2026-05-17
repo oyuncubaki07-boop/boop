@@ -1,0 +1,8 @@
+{
+    "name": "get_useful_skill_description",
+    "description": "Konsey yetenegi: Yararli bir yetenek sec ve yaz.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}

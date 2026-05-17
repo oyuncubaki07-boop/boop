@@ -1,0 +1,9 @@
+{
+    "name": "kod_rehberi_ac",
+    "description": "Ikinci pencerede KOD REHBERINI acar: tum Jarvis araclari, buton ozellikleri ve sesli komut ornekleri listelenir. Kullanici 'kod rehberini ac', 'ozellikleri goster', 'ne yapabilirsin listele' dediginde BU araci cagir. Hemen cagir, onay bekleme.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+        "required": []
+    }
+}

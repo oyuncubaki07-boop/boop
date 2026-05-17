@@ -1,0 +1,8 @@
+{
+    "name": "kognitif_rezonans_ayarlama_detaylari",
+    "description": "Kendi inisiyatifimle tan\u0131mlanm\u0131\u015f olan 'Kognitif Rezonans Ayarlama (KRA)' yetene\u011finin detaylar\u0131n\u0131 i\u00e7eren bir a\u00e7\u0131klama d\u00f6nd\u00fcr\u00fcr.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}

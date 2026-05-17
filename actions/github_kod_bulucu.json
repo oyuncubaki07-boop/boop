@@ -1,0 +1,16 @@
+{
+    "name": "github_kod_bulucu",
+    "description": "Kullanıcı senden GitHub'dan bir kod bulmanı, araştırmanı veya yeni bir özellik eklemeni istediğinde GitHub üzerinde Python kodları arar ve içeriğini sana getirir. Getirilen kodu analiz edip 'konseyi_topla' aracı ile kendi sistemine ekleyebilirsin.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "query": {
+                "type": "STRING",
+                "description": "GitHub'da aranacak kod için anahtar kelimeler (Örnek: 'currency converter', 'system monitor', 'youtube downloader')"
+            }
+        },
+        "required": [
+            "query"
+        ]
+    }
+}

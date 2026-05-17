@@ -25,18 +25,7 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 
-import google.generativeai as genai
-
-
-def _get_api_key() -> str:
-    config_path = Path(__file__).resolve().parent.parent / "config" / "api_keys.json"
-    with open(config_path, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
-
-
-def _gemini_client():
-    genai.configure(api_key=_get_api_key())
-    return genai.GenerativeModel("gemini-2.5-flash")
+from core.gemini_client import generate_multimodal, generate_text, generate_with_image
 
 
 def _detect_type(path: Path) -> str:
@@ -87,7 +76,6 @@ def _process_image(path: Path, action: str, params: dict, speak=None) -> str:
 
     if action in ("describe", "ocr", "analyze", "read", "extract_text"):
         try:
-            model  = _gemini_client()
             img    = Image.open(path)
             prompt = {
                 "describe": "Describe this image in detail.",
@@ -100,8 +88,7 @@ def _process_image(path: Path, action: str, params: dict, speak=None) -> str:
             if params.get("instruction"):
                 prompt = params["instruction"]
 
-            response = model.generate_content([prompt, img])
-            result   = response.text.strip()
+            result   = generate_with_image(prompt, img)
 
             if len(result) > 500 and params.get("save", True):
                 out = _output_path(path, "result", ".txt")
@@ -207,9 +194,7 @@ def _process_pdf(path: Path, action: str, params: dict, speak=None) -> str:
             "reformat":       f"Reformat this text cleanly with proper structure:\n\n{text}",
         }
         try:
-            model    = _gemini_client()
-            response = model.generate_content(prompt_map.get(action, f"Analyze:\n\n{text}"))
-            result   = response.text.strip()
+            result   = generate_text(prompt_map.get(action, f"Analyze:\n\n{text}"))
             if len(result) > 600 and params.get("save", True):
                 out = _output_path(path, action, ".txt")
                 out.write_text(result, encoding="utf-8")
@@ -297,9 +282,7 @@ def _process_text_doc(path: Path, file_type: str, action: str,
         instruction = action
 
     try:
-        model    = _gemini_client()
-        response = model.generate_content(prompt_map[action])
-        result   = response.text.strip()
+        result   = generate_text(prompt_map[action])
         if len(result) > 600 and params.get("save", True):
             out = _output_path(path, action, ".txt")
             out.write_text(result, encoding="utf-8")
@@ -344,9 +327,7 @@ def _process_data(path: Path, file_type: str, action: str,
                    f"Rows: {len(df)}\nPreview:\n{preview}\n\n"
                    f"Give insights, patterns, and notable findings.")
         try:
-            model    = _gemini_client()
-            response = model.generate_content(prompt)
-            return response.text.strip()
+            return generate_text(prompt)
         except Exception as e:
             return f"AI analysis failed: {e}"
 
@@ -398,11 +379,9 @@ def _process_data(path: Path, file_type: str, action: str,
 
     preview = df.head(30).to_string()
     try:
-        model    = _gemini_client()
-        response = model.generate_content(
+        return generate_text(
             f"Task: {action}\nDataset ({len(df)} rows, cols: {list(df.columns)}):\n{preview}"
         )
-        return response.text.strip()
     except Exception as e:
         return f"Processing failed: {e}"
 
@@ -429,9 +408,7 @@ def _process_json(path: Path, action: str, params: dict, speak=None) -> str:
         if params.get("instruction"):
             prompt = f"{params['instruction']}\n\nJSON data:\n{preview}"
         try:
-            model    = _gemini_client()
-            response = model.generate_content(prompt)
-            return response.text.strip()
+            return generate_text(prompt)
         except Exception as e:
             return f"AI processing failed: {e}"
 
@@ -493,9 +470,7 @@ def _process_code(path: Path, action: str, params: dict, speak=None) -> str:
         prompt = prompt_map[action]
 
     try:
-        model    = _gemini_client()
-        response = model.generate_content(prompt)
-        result   = response.text.strip()
+        result   = generate_text(prompt)
 
         if action in ("fix", "optimize", "document") and params.get("save", True):
             out = _output_path(path, action)
@@ -527,18 +502,16 @@ def _process_audio(path: Path, action: str, params: dict, speak=None) -> str:
 
     if action == "transcribe":
         try:
-            model   = _gemini_client()
             content = path.read_bytes()
             mime    = {
                 "mp3": "audio/mp3", "wav": "audio/wav",
                 "ogg": "audio/ogg", "m4a": "audio/mp4",
                 "aac": "audio/aac", "flac": "audio/flac",
             }.get(path.suffix.lstrip(".").lower(), "audio/mpeg")
-            response = model.generate_content([
+            result = generate_multimodal([
                 "Transcribe all speech in this audio file accurately.",
-                {"mime_type": mime, "data": content}
+                (content, mime),
             ])
-            result = response.text.strip()
             if params.get("save", True):
                 out = _output_path(path, "transcript", ".txt")
                 out.write_text(result, encoding="utf-8")
@@ -764,70 +737,74 @@ def _process_pptx(path: Path, action: str, params: dict, speak=None) -> str:
             out.write_text(text, encoding="utf-8")
             return f"Text extracted. Saved: {out.name}"
         try:
-            model    = _gemini_client()
-            prompt   = f"{'Summarize' if action == 'summarize' else 'Analyze'} this presentation:\n{text[:30000]}"
-            response = model.generate_content(prompt)
-            return response.text.strip()
+            prompt = f"{'Summarize' if action == 'summarize' else 'Analyze'} this presentation:\n{text[:30000]}"
+            return generate_text(prompt)
         except Exception as e:
             return f"AI processing failed: {e}"
 
     return f"Unknown PPTX action: '{action}'. Try: summarize, extract_text, analyze"
 
 def file_processor(parameters: dict, player=None, speak=None) -> str:
-    file_path_str = parameters.get("file_path", "").strip()
-    if not file_path_str:
-        return "No file path provided."
-
-    path = Path(file_path_str)
-    if not path.exists():
-        return f"File not found: {file_path_str}"
-    if not path.is_file():
-        return f"Path is not a file: {file_path_str}"
-
-    file_type   = _detect_type(path)
-    action      = (parameters.get("action") or "").lower().strip()
-    instruction = parameters.get("instruction", "")
-    params      = {**parameters, "instruction": instruction}
-
-    log_msg = f"[FileProcessor] {file_type.upper()} | {path.name} | action={action or 'auto'}"
-    print(log_msg)
-    if player:
-        player.write_log(log_msg)
-
-    if file_type == "unknown":
-        try:
-            content = path.read_text(encoding="utf-8", errors="ignore")[:10000]
-            model   = _gemini_client()
-            prompt  = f"File: {path.name}\nContent preview:\n{content}\n\nTask: {action or instruction or 'Describe what this file contains and what can be done with it.'}"
-            response = model.generate_content(prompt)
-            return response.text.strip()
-        except Exception as e:
-            return f"Unknown file type ({path.suffix}). Could not process: {e}"
-
-    dispatch = {
-        "image":   _process_image,
-        "pdf":     _process_pdf,
-        "docx":    lambda p, a, pm, s: _process_text_doc(p, "docx", a, pm, s),
-        "text":    lambda p, a, pm, s: _process_text_doc(p, "text", a, pm, s),
-        "csv":     lambda p, a, pm, s: _process_data(p, "csv",   a, pm, s),
-        "excel":   lambda p, a, pm, s: _process_data(p, "excel", a, pm, s),
-        "json":    _process_json,
-        "xml":     lambda p, a, pm, s: _process_json(p, a, pm, s),  
-        "code":    _process_code,
-        "audio":   _process_audio,
-        "video":   _process_video,
-        "archive": _process_archive,
-        "pptx":    _process_pptx,
-    }
-
-    handler = dispatch.get(file_type)
-    if not handler:
-        return f"Unsupported file type: {file_type}"
-
     try:
-        result = handler(path, action, params, speak)
-        return result or "Done."
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return f"Processing failed: {e}"
+        file_path_str = str((parameters or {}).get("file_path", "")).strip()
+        if not file_path_str:
+            return "Efendim, islem icin bir dosya yolu gerekiyor."
+
+        path = Path(file_path_str)
+        if not path.exists():
+            return f"Efendim, dosyayi bulamadim: {file_path_str}"
+        if not path.is_file():
+            return f"Efendim, bu yol bir dosya degil: {file_path_str}"
+
+        file_type = _detect_type(path)
+        action = str((parameters or {}).get("action") or "").lower().strip()
+        instruction = str((parameters or {}).get("instruction") or "")
+        params = {**(parameters or {}), "instruction": instruction}
+
+        log_msg = f"[FileProcessor] {file_type.upper()} | {path.name} | action={action or 'auto'}"
+        try:
+            print(log_msg)
+            if player:
+                player.write_log(log_msg)
+        except Exception:
+            pass
+
+        if file_type == "unknown":
+            try:
+                content = path.read_text(encoding="utf-8", errors="ignore")[:10000]
+                prompt = (
+                    f"File: {path.name}\nContent preview:\n{content}\n\n"
+                    f"Task: {action or instruction or 'Describe what this file contains.'}"
+                )
+                text = generate_text(prompt)
+                return text or "Efendim, dosya analizi su an bos dondu."
+            except Exception as exc:
+                return f"Efendim, dosya turu taninmadi ({path.suffix}): {exc}"
+
+        dispatch = {
+            "image": _process_image,
+            "pdf": _process_pdf,
+            "docx": lambda p, a, pm, s: _process_text_doc(p, "docx", a, pm, s),
+            "text": lambda p, a, pm, s: _process_text_doc(p, "text", a, pm, s),
+            "csv": lambda p, a, pm, s: _process_data(p, "csv", a, pm, s),
+            "excel": lambda p, a, pm, s: _process_data(p, "excel", a, pm, s),
+            "json": _process_json,
+            "xml": lambda p, a, pm, s: _process_json(p, a, pm, s),
+            "code": _process_code,
+            "audio": _process_audio,
+            "video": _process_video,
+            "archive": _process_archive,
+            "pptx": _process_pptx,
+        }
+
+        handler = dispatch.get(file_type)
+        if not handler:
+            return f"Efendim, bu dosya turu henuz desteklenmiyor: {file_type}"
+
+        try:
+            result = handler(path, action, params, speak)
+            return result or "Efendim, islem tamamlandi."
+        except Exception as exc:
+            return f"Efendim, dosya islenirken kucuk bir aksaklik oldu: {exc}"
+    except Exception as exc:
+        return f"Efendim, dosya modulu su an yanit veremedi: {exc}"

@@ -1,0 +1,29 @@
+{
+    "name": "get_current_weather",
+    "description": "Belirtilen \u015fehir i\u00e7in g\u00fcncel hava durumu ko\u015fullar\u0131n\u0131 OpenWeatherMap API kullanarak getirir. Bu, otonom motorun \u00e7evre bilincini art\u0131r\u0131r.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "city": {
+                "type": "string",
+                "description": "Hava durumu bilgisi al\u0131nacak \u015fehrin ad\u0131 (\u00f6rne\u011fin, 'Ankara', 'London').",
+                "required": true
+            },
+            "unit": {
+                "type": "string",
+                "description": "S\u0131cakl\u0131k birimi (\u00f6rne\u011fin: 'metric' Celsius i\u00e7in, 'imperial' Fahrenheit i\u00e7in). Varsay\u0131lan 'metric'tir.",
+                "enum": [
+                    "metric",
+                    "imperial"
+                ],
+                "default": "metric",
+                "required": false
+            },
+            "api_key": {
+                "type": "string",
+                "description": "OpenWeatherMap API anahtar\u0131. Bu anahtar OpenWeatherMap geli\u015ftirici portal\u0131ndan edinilmelidir.",
+                "required": true
+            }
+        }
+    }
+}

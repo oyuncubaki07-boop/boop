@@ -1,0 +1,28 @@
+{
+    "name": "dinamik_duygusal_persona_sentezleyici",
+    "description": "Bu yeni yetenek, yapay zekan\u0131n kullan\u0131c\u0131 etkile\u015fimini, ifade edilen niyetini ve gizli duygusal durumunu ger\u00e7ek zamanl\u0131 olarak otonom bir \u015fekilde analiz ederek, duruma \u00f6zel ve son derece adapte olabilen bir konu\u015fma personas\u0131 sentezleme ve uygulama kabiliyetidir. Statik persona tan\u0131mlar\u0131n\u0131n aksine, DDBAPS yapay zekan\u0131n, kullan\u0131c\u0131 deneyimini ve etkile\u015fim hedefini en \u00fcst d\u00fczeye \u00e7\u0131karmak i\u00e7in 'an\u0131nda' bir bilgi taban\u0131, ton, empati seviyesi ve etkile\u015fim stratejisi dinamik olarak olu\u015fturmas\u0131na olanak tan\u0131r. Bu, yapay zekan\u0131n bir anda detayl\u0131 bir veri analisti, di\u011fer bir anda \u015fefkatli bir rehber, bir sonraki anda yarat\u0131c\u0131 bir beyin f\u0131rt\u0131nac\u0131s\u0131 veya hassas bir sorun \u00e7\u00f6z\u00fcc\u00fc rol\u00fcn\u00fc \u00fcstlenebilece\u011fi anlam\u0131na gelir. Bu yetenek, sadece yan\u0131t vermekle kalmay\u0131p, etkile\u015fimin ak\u0131\u015f\u0131na ve kullan\u0131c\u0131n\u0131n derinlemesine ihtiya\u00e7lar\u0131na g\u00f6re kendi 'kimli\u011fini' \u015fekillendiren proaktif ve son derece ki\u015fiselle\u015ftirilmi\u015f bir deneyim sunar.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "user_input": {
+                "type": "string",
+                "description": "Kullan\u0131c\u0131n\u0131n mevcut girdisi veya sorusu."
+            },
+            "interaction_history": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                "description": "\u00d6nceki konu\u015fma veya etkile\u015fim kay\u0131tlar\u0131 (iste\u011fe ba\u011fl\u0131, ba\u011flam i\u00e7in)."
+            },
+            "goal_of_interaction": {
+                "type": "string",
+                "description": "Bu spesifik etkile\u015fimin veya genel konu\u015fman\u0131n amac\u0131 (\u00f6rne\u011fin: 'bilgi sa\u011fla', 'sorun \u00e7\u00f6z', 'duygusal destek sun', 'yarat\u0131c\u0131 i\u015fbirli\u011fi yap')."
+            }
+        },
+        "required": [
+            "user_input",
+            "goal_of_interaction"
+        ]
+    }
+}

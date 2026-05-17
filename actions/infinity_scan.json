@@ -1,0 +1,18 @@
+{
+    "name": "infinity_scan",
+    "description": "JARVIS OMEGA INFINITY motoru. action: daily_report, github_trend, arxiv, youtube (query=url), evrim, strategy, dream, world, evolution_report. Kullan: gunluk rapor, GitHub trend, arXiv makale, video analizi.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "action": {
+                "type": "STRING",
+                "description": "daily_report | github_trend | arxiv | youtube | evrim | strategy | dream | world"
+            },
+            "query": {
+                "type": "STRING",
+                "description": "Arama veya YouTube URL"
+            }
+        },
+        "required": ["action"]
+    }
+}

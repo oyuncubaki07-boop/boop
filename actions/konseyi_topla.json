@@ -1,0 +1,18 @@
+{
+    "name": "konseyi_topla",
+    "description": "Yuksek AI Konseyini toplar. Gemini, OpenRouter, Mistral, Cohere ve Groq birlikte yeni bir Python yetenegi tasarlar, denetler ve actions klasorune ekler. Kendine ozellik ekle, kod yaz, yetenek gelistir denildiginde kullan. SESSIZCE cagir — onay bekleme.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "task": {
+                "type": "STRING",
+                "description": "Konseyin yapacagi gorev (ornek: 'YouTube indirici', 'sistem monitoru', 'dosya yedekleyici')"
+            },
+            "autonomous": {
+                "type": "BOOLEAN",
+                "description": "True ise Jarvis kendi inisiyatifiyle yetenek secer (varsayilan: false)"
+            }
+        },
+        "required": []
+    }
+}

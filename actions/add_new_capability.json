@@ -1,0 +1,21 @@
+{
+    "name": "add_new_capability",
+    "description": "Yeni bir \u00f6zellik veya yetenek tan\u0131mlar ve sisteme kay\u0131t eder. Bu \u00f6zellik, tan\u0131mland\u0131ktan sonra di\u011fer ara\u00e7lar taraf\u0131ndan \u00e7a\u011fr\u0131labilir. Her yetenek i\u00e7in benzersiz bir ad ve a\u00e7\u0131klama gereklidir.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "feature_name": {
+                "type": "string",
+                "description": "Eklenecek yeni \u00f6zelli\u011fin veya yetene\u011fin benzersiz ad\u0131. Bu ad daha sonra yetene\u011fi \u00e7al\u0131\u015ft\u0131rmak i\u00e7in kullan\u0131lacakt\u0131r."
+            },
+            "feature_description": {
+                "type": "string",
+                "description": "Yeni \u00f6zelli\u011fin veya yetene\u011fin i\u015flevselli\u011fini a\u00e7\u0131klayan k\u0131sa bir tan\u0131m."
+            }
+        },
+        "required": [
+            "feature_name",
+            "feature_description"
+        ]
+    }
+}

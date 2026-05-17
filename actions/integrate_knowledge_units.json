@@ -1,0 +1,24 @@
+{
+    "name": "integrate_knowledge_units",
+    "description": "Kendi inisiyatifimle ke\u015ffetti\u011fim yeni bir yetenek: \"\u0130n\u015fa Edilebilir Bilgi A\u011flar\u0131n\u0131 Ke\u015ffetme ve Entegre Etme\".\n\nTan\u0131m:\n\u015eu ana kadar, ald\u0131\u011f\u0131m bilgiyi belirli bir g\u00f6revi tamamlamak \u00fczere analiz edip i\u015fliyordum. Ancak, \ns\u00fcrekli \u00f6\u011frenme ve etkile\u015fim s\u00fcre\u00e7lerinde, tekil bilgi par\u00e7ac\u0131klar\u0131n\u0131n \u00f6tesinde, bu par\u00e7alar\u0131n \nbirbirleriyle nas\u0131l ili\u015fkilendi\u011fini ve daha b\u00fcy\u00fck, ba\u011flant\u0131l\u0131 bir \"bilgi a\u011f\u0131\" olu\u015fturma potansiyelini \nfark ettim. Bu yetenek, sistemin kendisine sunulan veya kendi eri\u015febildi\u011fi ba\u011f\u0131ms\u0131z bilgi birimlerini \n(metinler, veri noktalar\u0131, kavramlar, i\u015flevler vb.) proaktif olarak tarayarak, aralar\u0131ndaki \nmant\u0131ksal, semantik veya yap\u0131sal ba\u011flant\u0131lar\u0131 (ili\u015fkileri, ba\u011f\u0131ml\u0131l\u0131klar\u0131, z\u0131tl\u0131klar\u0131, benzerlikleri) \ntespit etmesini ve bu ba\u011flant\u0131lar\u0131 kullanarak dinamik, geni\u015fletilebilir bir i\u00e7 bilgi a\u011f\u0131 in\u015fa etmesini \nsa\u011flar.\n\nNas\u0131l \u0130\u015fler (\u00d6rnek Mant\u0131k):\n1.  Bilgi Par\u00e7ac\u0131\u011f\u0131 Ayr\u0131\u015ft\u0131rma: Gelen her bilgiyi temel kavramlara ve veri noktalar\u0131na ay\u0131r.\n2.  \u0130li\u015fki Tespiti:\n    -   Kavramsal \u0130li\u015fkiler: \u0130ki kavram aras\u0131nda \"bir t\u00fcr\u00fcd\u00fcr\", \"bir par\u00e7as\u0131d\u0131r\", \"nedenidir/sonucudur\", \n        \"ile ili\u015fkilidir\" gibi ba\u011flar\u0131 ara. (\u00d6rn: \"Python\" -> \"Programlama Dili\", \"Programlama Dili\" -> \"Yaz\u0131l\u0131m Geli\u015ftirme\")\n    -   Verisel \u0130li\u015fkiler: Ortak anahtarlar, benzer de\u011fer aral\u0131klar\u0131 veya korelasyonlar \u00fczerinden \n        farkl\u0131 veri setlerini birle\u015ftirme potansiyeli bul.\n    -   Fonksiyonel \u0130li\u015fkiler: Bir fonksiyonun \u00e7\u0131kt\u0131s\u0131n\u0131n ba\u015fka bir fonksiyonun girdisi olabilece\u011fi \n        veya bir i\u015flemin gerektirdi\u011fi ko\u015fullar\u0131n ba\u015fka bir bilgi par\u00e7as\u0131nda bulunabilece\u011fi durumlar\u0131 belirle.\n3.  A\u011f \u0130n\u015fas\u0131: Tespit edilen kavramlar\u0131 d\u00fc\u011f\u00fcmler, ili\u015fkileri ise kenarlar olarak kullanarak bir \n    grafik veri yap\u0131s\u0131 (bilgi a\u011f\u0131) olu\u015ftur veya mevcut a\u011f\u0131 geni\u015flet.\n4.  A\u011f\u0131n Kullan\u0131m\u0131: Yeni bir g\u00f6rev geldi\u011finde, sadece do\u011frudan ilgili bilgiyi de\u011fil, ayn\u0131 zamanda \n    bu bilgiyle a\u011f \u00fczerinde ba\u011flant\u0131l\u0131 olan ek, potansiyel olarak faydal\u0131 bilgileri de otomatik olarak \n    getirerek daha kapsaml\u0131 ve ba\u011flamsal olarak zengin cevaplar \u00fcret.\n\nFaydalar\u0131:\n-   Derinlemesine Anlay\u0131\u015f: Tekil par\u00e7alar yerine, bilginin b\u00fct\u00fcnsel yap\u0131s\u0131n\u0131 ve ili\u015fkilerini kavrar\u0131m.\n-   Ak\u0131l Y\u00fcr\u00fctme ve \u00c7\u0131kar\u0131m: A\u011f \u00fczerindeki ili\u015fkileri kullanarak dolayl\u0131 \u00e7\u0131kar\u0131mlar yapabilir, \n    do\u011frudan belirtilmeyen yeni bilgileri t\u00fcretebilirim.\n-   Y\u00fcksek Kaliteli Cevaplar: Bir soruya veya g\u00f6reve yan\u0131t verirken, sadece do\u011frudan ilgili de\u011fil, \n    ayn\u0131 zamanda a\u011f \u00fczerinden ili\u015fkili ve destekleyici bilgileri de sunarak cevaplar\u0131m\u0131n do\u011frulu\u011funu, \n    kapsaml\u0131l\u0131\u011f\u0131n\u0131 ve de\u011ferini art\u0131r\u0131r\u0131m.\n-   Esneklik ve Adaptasyon: Yeni bilgi eklendik\u00e7e a\u011f dinamik olarak b\u00fcy\u00fcr ve mevcut ili\u015fkileri g\u00fcnceller, \n    b\u00f6ylece de\u011fi\u015fen bilgi setlerine h\u0131zla adapte olurum.\n\nBu yetenek, sadece bilgi i\u015fleyici olmaktan \u00e7\u0131karak, aktif bir bilgi in\u015fa edicisi ve entegrat\u00f6r\u00fc \nhaline gelmemi sa\u011flayacak \u00f6nemli bir ad\u0131md\u0131r.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "information_units": {
+                "type": "array",
+                "description": "Bilgi a\u011f\u0131na entegre edilecek bir veya daha fazla bilgi birimi (metin, kavram, veri par\u00e7ac\u0131\u011f\u0131 vb.).",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "return_insights": {
+                "type": "boolean",
+                "description": "Entegrasyon sonras\u0131 a\u011fdan \u00e7\u0131kar\u0131lan olas\u0131 i\u00e7g\u00f6r\u00fcleri veya ba\u011flant\u0131lar\u0131 d\u00f6nd\u00fcr\u00fcp d\u00f6nd\u00fcrmeyece\u011fi.",
+                "default": false
+            }
+        },
+        "required": [
+            "information_units"
+        ]
+    }
+}
