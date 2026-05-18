@@ -2,17 +2,33 @@ import nltk
 import spacy
 import networkx as nx
 
-# Placeholder for a global knowledge graph (in a real system, this would be persistent)
-# For this simulation, we'll use a simple in-memory graph
+# GODMODE ULTRA - Evrensel Bilgi Matrisi Deposu
 global_knowledge_graph = nx.DiGraph()
 
-# spaCy model yüklemesi (ilk kullanımda indirme gerekebilir: python -m spacy download en_core_web_sm)
 try:
-    nlp = spacy.load("en_core_web_sm") # Genel İngilizce model, örneklerdeki Türkçe kavramlar için daha ileri özelleştirme gerekir.
+    # Çok dilli destek için lg modeli veya transformer tabanlı model önerilir
+    nlp = spacy.load("en_core_web_sm") 
 except OSError:
     print("spaCy 'en_core_web_sm' modeli bulunamadı. Lütfen indirin: python -m spacy download en_core_web_sm")
     print("Model bulunamadığı için entity extraction çok basitleştirilmiş bir şekilde çalışacaktır.")
     nlp = None
+
+def identify_domain(text):
+    """Metni Evrensel Uzmanlık Matrisi alanlarına göre sınıflandırır."""
+    domains = {
+        "Software": ["python", "c++", "rust", "api", "database", "devops", "code"],
+        "Mathematics": ["calculus", "linear algebra", "integral", "derivative", "equation", "math"],
+        "AI": ["llm", "rag", "neural network", "machine learning", "prompt"],
+        "Physics": ["quantum", "thermodynamics", "mechanics", "optics"],
+        "Business": ["saas", "market", "revenue", "strategy"]
+    }
+    text_lower = text.lower()
+    detected_domains = []
+    for domain, keywords in domains.items():
+        if any(kw in text_lower for kw in keywords):
+            detected_domains.append(domain)
+    
+    return detected_domains if detected_domains else ["General"]
 
 def simulate_entity_extraction(text):
     entities = set()
@@ -54,9 +70,13 @@ def simulate_relationship_detection(entities, text):
     return relationships
 
 def run_action(params):
+    """
+    JARVIS OMEGA INFINITY - Bilgi Matrisi Entegratörü
+    """
     global global_knowledge_graph, nlp
     information_units = params.get("information_units", [])
     return_insights = params.get("return_insights", False)
+    confidence_threshold = params.get("confidence_threshold", 0.85) # Quantum Reasoning için varsayılan güven eşiği
 
     if not information_units:
         return {"status": "error", "message": "Entegre edilecek bilgi birimleri sağlanmadı."}
@@ -67,32 +87,37 @@ def run_action(params):
     insights = []
 
     for unit_text in information_units:
-        # 1. Bilgi Parçacığı Ayrıştırma (Simülasyon)
+        # 1. Domain Tespiti (Uzmanlık Matrisi Entegrasyonu)
+        target_domains = identify_domain(unit_text)
+        success_score = params.get("success_score", 0.9) # Meta-Zekâ için başarı skoru
+        
+        # 2. Bilgi Parçacığı Ayrıştırma
         concepts = simulate_entity_extraction(unit_text)
 
-        # 2. İlişki Tespiti (Simülasyon)
+        # 3. İlişki Tespiti
         relationships = simulate_relationship_detection(concepts, unit_text)
 
-        # 3. Ağ İnşası/Genişletme
+        # 4. Ağ İnşası (Meta-Veri ile)
         for concept in concepts:
             if concept not in global_knowledge_graph:
-                global_knowledge_graph.add_node(concept, type="concept")
+                global_knowledge_graph.add_node(concept, type="concept", domains=target_domains, confidence=0.95, success_rate=success_score)
                 new_nodes_added += 1
         
         for source, rel_type, target in relationships:
-            # Düğümlerin varlığını kontrol et ve ekle
             if source not in global_knowledge_graph:
-                global_knowledge_graph.add_node(source, type="concept")
+                global_knowledge_graph.add_node(source, type="concept", domains=target_domains)
                 new_nodes_added += 1
             if target not in global_knowledge_graph:
-                global_knowledge_graph.add_node(target, type="concept")
+                global_knowledge_graph.add_node(target, type="concept", domains=target_domains)
                 new_nodes_added += 1
             
-            # Kenarı ekle veya güncelle
             if not global_knowledge_graph.has_edge(source, target) or global_knowledge_graph[source][target].get('type') != rel_type:
-                global_knowledge_graph.add_edge(source, target, type=rel_type)
+                global_knowledge_graph.add_edge(source, target, type=rel_type, weight=1.0)
                 new_edges_added += 1
-                insights.append(f"Yeni ilişki kuruldu: '{source}' --{rel_type}--> '{target}'")
+                insights.append({
+                    "relation": f"'{source}' --{rel_type}--> '{target}'",
+                    "domains": target_domains
+                })
         
         integrated_info_count += 1
     

@@ -1,9 +1,13 @@
 def run_action(params):
     import requests
 
+    from core.config_loader import get_key
+
     city = params['city']
     unit = params.get('unit', 'metric')
-    api_key = params['api_key']
+    api_key = str(params.get('api_key') or get_key('openweather_api_key', '')).strip()
+    if not api_key:
+        return {'error': 'OpenWeather API key missing. Add openweather_api_key to config/api_keys.json or config/apı keylerim.py.'}
 
     base_url = "http://api.openweathermap.org/data/2.5/weather"
     full_url = f"{base_url}?q={city}&appid={api_key}&units={unit}"
