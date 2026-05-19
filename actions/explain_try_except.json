@@ -1,0 +1,8 @@
+{
+    "name": "explain_try_except",
+    "description": "Konsey yetenegi: Yararli bir yetenek sec ve yaz.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}

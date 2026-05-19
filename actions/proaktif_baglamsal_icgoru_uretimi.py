@@ -7,8 +7,7 @@ def run_action(params):
     # Gerçek bir LLM, sorguyu derinlemesine bağlamsal olarak anlayarak ve bilgi tabanını kullanarak
     # çok daha zengin, alakalı ve kişiselleştirilmiş içgörüler üretecektir.
     
-    direct_response = f"'{query}' ile ilgili temel yanıtınız burada:
-    (Gerçek bir LLM bu noktada sorgunuzla ilgili doğrudan ve doğru bilgiyi sağlar.)"
+    direct_response = f"'{query}' ile ilgili temel yanıtınız burada:\n    (Gerçek bir LLM bu noktada sorgunuzla ilgili doğrudan ve doğru bilgiyi sağlar.)"
 
     proactive_insights = []
     # Basit anahtar kelime bazlı örnek içgörü üretimi

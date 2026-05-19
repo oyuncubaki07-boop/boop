@@ -118,5 +118,5 @@ def run_action(params):
     if ai_agent_instance is None:
         ai_agent_instance = AI_SelfRefinementAgent()
 
-    task_description = params["task_description"]
+    task_description = params.get("task_description", "Lütfen bir görev belirtin.")
     return ai_agent_instance.apply_new_skill(task_description)

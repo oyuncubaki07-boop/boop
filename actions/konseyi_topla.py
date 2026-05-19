@@ -1,6 +1,13 @@
+import webbrowser
+import os
+
 def run_action(parameters: dict) -> str:
     try:
         from core.thinker import generate_and_save_tool
+
+        # Konsey odasını otomatik aç
+        html_path = os.path.abspath("konsey_odasi.html")
+        webbrowser.open(f"file://{html_path}")
 
         params = parameters or {}
         task = str(params.get("task") or params.get("task_description") or "").strip()
