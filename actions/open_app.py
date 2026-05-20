@@ -169,6 +169,7 @@ def open_app(
     response=None,
     player=None,
     session_memory=None,
+    speak=None,
 ) -> str:
     app_name = (parameters or {}).get("app_name", "").strip()
 
@@ -176,6 +177,74 @@ def open_app(
         return "Please specify which application to open, sir."
 
     system   = platform.system()
+    
+    # Intercept AMY OS launch requests
+    app_name_lower = app_name.lower().replace(" ", "").replace("'", "").replace("’", "")
+    if any(keyword in app_name_lower for keyword in ["amy", "amyos", "amyiac", "openamy"]):
+        import webbrowser
+        import os
+        import subprocess
+        import sys
+        import socket
+        from pathlib import Path
+        
+        # 1. Start FastAPI server (if not already running on port 8341)
+        is_server_running = _is_running("server.py") or _is_running("uvicorn")
+        if not is_server_running:
+            print("[open_app] 🌸 AMY FastAPI server is not running, launching silently...")
+            base_dir = Path(__file__).resolve().parent.parent
+            amy_path = base_dir / "amy_os" / "server.py"
+            if amy_path.exists():
+                subprocess.Popen(
+                    [sys.executable, str(amy_path)],
+                    cwd=str(base_dir),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+                )
+                time.sleep(1.5) # Wait for startup
+        
+        # 2. Start Vite dev server (if not already running)
+        base_dir = Path(__file__).resolve().parent.parent
+        frontend_dir = base_dir / "amy_os" / "frontend"
+        if frontend_dir.exists():
+            print("[open_app] 🌸 Launching AMY Vite frontend dev server silently...")
+            subprocess.Popen(
+                ["npm", "run", "dev"],
+                cwd=str(frontend_dir),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                shell=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+            )
+            time.sleep(1.0)
+        
+        # 3. Check dynamically which port is open
+        def is_port_open(port):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(0.25)
+                try:
+                    s.connect(('127.0.0.1', port))
+                    return True
+                except Exception:
+                    return False
+        
+        target_url = 'http://localhost:5174'
+        if not is_port_open(5174):
+            print("[open_app] 🌸 Vite port 5174 is closed (NPM missing/inactive). Routing to FastAPI port 8341...")
+            target_url = 'http://localhost:8341'
+            
+        webbrowser.open(target_url)
+        
+        msg = "AMY OS sistemleri ekrana yansıtılıyor, efendim."
+        if speak:
+            try:
+                speak(msg)
+            except Exception as e:
+                print(f"[open_app] ⚠️ Speak call failed: {e}")
+                
+        return msg
+
     launcher = _OS_LAUNCHERS.get(system)
 
     if launcher is None:
