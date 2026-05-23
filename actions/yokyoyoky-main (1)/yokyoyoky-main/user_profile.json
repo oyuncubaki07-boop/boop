@@ -1,0 +1,40 @@
+{
+  "identity": {
+    "full_name": "Baki",
+    "preferred_title": "Efendim",
+    "birthday": ""
+  },
+  "contact": {
+    "email": "",
+    "phone": ""
+  },
+  "environment": {
+    "city": "Konya",
+    "setup": "3-Monitors / Opera GX",
+    "productive_hours": "20:00-02:00",
+    "music": ""
+  },
+  "projects": [
+    "Ertugrul Dugun Yemekleri",
+    "Erenler Etli Ekmek"
+  ],
+  "goals": [
+    "Amerika'ya gitmek",
+    "AI geliştirmek",
+    "Para kazanmak"
+  ],
+  "devices": {
+    "tv": {
+      "preferred_ip": "",
+      "last_status": "display-online",
+      "preferred_audio_device": "ONVO_42OV6000F"
+    }
+  },
+  "behavior": {
+    "blacklisted_methods": []
+  },
+  "learned_knowledge": [],
+  "security": {
+    "shutdown_pin_hash": "f1cfa5ebb149e8099d561aae57beed6c68f990f45a910ea9d7b460dbcc5350be"
+  }
+}

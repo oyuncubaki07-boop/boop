@@ -1,0 +1,13 @@
+{
+  "last_scan": "2026-04-03T20:04:19.990125",
+  "results": {
+    "ornek@kullanici.com": {
+      "breached": false,
+      "breaches": [],
+      "message": "Veritabanlar\u0131nda e\u015fle\u015fme bulunamad\u0131 (sim\u00fclasyon)",
+      "email": "ornek@kullanici.com",
+      "scanned_at": "2026-04-03T20:04:19.990125",
+      "cached": false
+    }
+  }
+}

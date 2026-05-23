@@ -1,0 +1,10 @@
+{
+    "gemini_api_key": "AIzaSyAQslORitUhjcR02hC9ezdawaI1H7ooe_Y",
+    "openrouter_api_key": "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",
+    "mistral_api_key": "563fbfd4-6d0c-475e-ab04-eb99322700c8",
+    "cohere_api_key": "M6RccQJLJ46YtjcO2tyKNSLLzuMie2Hj8Axh73e6",
+    "ngrok_auth_token": "3BUkwwhqFJZ41PWV19CUB6N9nwQ_4SFBoBvNWLjSDGpFLcsb3",
+    "deepseek_api_key": "sk-9b7ce2ad98044a59ad2ebd4b341d3145",
+    "primary_model": "deepseek",
+    "fallback_models": ["openrouter", "gemini", "mistral", "cohere"]
+}

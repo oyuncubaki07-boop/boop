@@ -1,0 +1,72 @@
+[
+  {
+    "file": "otonom_modul_20260329_0055.py",
+    "desc": "Bu fonksiyon, verilen görevleri (her bir görevin çaba, etki ve son teslim tarihi gibi özellikleriyle) önceliklendirmeye yardımcı olur. Görevleri, belirlenen kriterlere göre bir öncelik puanı hesaplayarak sıralar.",
+    "ts": "2026-03-29T00:55:18.464007"
+  },
+  {
+    "file": "otonom_modul_20260329_0055.py",
+    "desc": "Belirtilen bir klasördeki dosyaları, dosya uzantılarına göre otomatik olarak alt klasörlere taşıyarak düzenler. Örneğin, tüm '.txt' dosyalarını 'txt_files' adlı bir klasöre, '.pdf' dosyalarını 'pdf_files' adlı bir klasöre taşır. Uzantısı olmayan dosyalar 'no_extension_files' adlı bir klasöre taşınır.",
+    "ts": "2026-03-29T00:55:14.948560"
+  },
+  {
+    "file": "otonom_modul_20260329_0052.py",
+    "desc": "Yeni bir sistem modülü eklendi.",
+    "ts": "2026-03-29T00:52:36.891017"
+  },
+  {
+    "file": "otonom_modul_20260329_0052.py",
+    "desc": "Verilen metnin ortalama okuma süresini (dakika cinsinden) kelime sayısına ve ortalama okuma hızına göre tahmin eder. Bu, bir makale, rapor veya belge okuma süresini hızlıca öğrenmek için kullanılabilir.",
+    "ts": "2026-03-29T00:52:33.980495"
+  },
+  {
+    "file": "otonom_modul_20260329_0046.py",
+    "desc": "Oyuncunun bulunduğu konumdaki yakın çevreyi tarayarak etkileşime geçilebilir objeleri ve mesafelerini listeler.",
+    "ts": "2026-03-29T00:46:57.106013"
+  },
+  {
+    "file": "otonom_modul_20260329_0046.py",
+    "desc": "Belirtilen veya varsayılan indirme klasöründeki dosyaları türlerine göre (resimler, belgeler, arşivler vb.) otomatik olarak alt klasörlere ayırarak düzenler.",
+    "ts": "2026-03-29T00:46:56.070235"
+  },
+  {
+    "file": "otonom_modul_20260329_0043.py",
+    "desc": "Verilen bir metni, belirli anahtar kelimelere veya işaretleyicilere göre mantıksal bölümlere ayırır ve her bölümü anahtar kelimesiyle birlikte döndürür. Bu, uzun metinleri yapılandırılmış parçalara ayırmak veya belirli konu başlıklarına göre içerik çıkarmak için kullanışlıdır.",
+    "ts": "2026-03-29T00:43:02.425620"
+  },
+  {
+    "file": "otonom_modul_20260329_0042.py",
+    "desc": "Kullanıcının verdiği bir konu hakkında rastgele, yaratıcı bir yazı, proje veya hikaye fikri/başlangıcı üretir.",
+    "ts": "2026-03-29T00:42:52.863816"
+  },
+  {
+    "file": "otonom_modul_20260329_0040.py",
+    "desc": "Verilen bir metni, anahtar kelime listelerine göre tanımlanmış kategorilere ayırır ve metnin hangi kategorilerle ilişkili olduğunu belirler.",
+    "ts": "2026-03-29T00:40:01.429005"
+  },
+  {
+    "file": "otonom_modul_20260329_0040.py",
+    "desc": "Verilen bir metindeki kelime sayısını, benzersiz kelime sayısını ve her kelimenin frekansını (yüzde ve ham sayı olarak) analiz eder. Yazarlar, içerik oluşturucular veya metin analizi yapmak isteyenler için faydalıdır.",
+    "ts": "2026-03-29T00:40:00.646439"
+  },
+  {
+    "file": "otonom_modul_20260328_2350.py",
+    "desc": "Belirtilen kriterlere göre güçlü ve rastgele bir şifre oluşturur.",
+    "ts": "2026-03-28T23:50:12.347212"
+  },
+  {
+    "file": "otonom_modul_20260328_1922.py",
+    "desc": "Bu fonksiyon, kullanıcının kişisel bir yapılacaklar listesini yönetmesine olanak tanır. Yeni öğeler ekleyebilir, mevcut listeyi görüntüleyebilir veya listeyi tamamen temizleyebilir.",
+    "ts": "2026-03-28T19:22:59.289786"
+  },
+  {
+    "file": "otonom_modul_20260328_1903.py",
+    "desc": "Bu fonksiyon, verilen bir metni tanımlanmış anahtar kelimeler kullanarak belirli kategorilere ayırır.",
+    "ts": "2026-03-28T19:03:54.956912"
+  },
+  {
+    "file": "otonom_modul_20260328_1900.py",
+    "desc": "Bu fonksiyon, verilen Python kodunu kullanarak yeni bir aksiyon dosyası oluşturur ve 'actions' klasörüne kaydeder.",
+    "ts": "2026-03-28T19:00:07.532041"
+  }
+]

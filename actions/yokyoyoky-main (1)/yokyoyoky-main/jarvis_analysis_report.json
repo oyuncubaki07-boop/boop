@@ -1,0 +1,148 @@
+{
+  "timestamp": "2026-05-05T11:23:50.051008",
+  "cpu_percent": 60.3,
+  "memory_percent": 56.9,
+  "disk_percent": 90.2,
+  "battery_percent": null,
+  "battery_plugged": null,
+  "top_processes": [
+    {
+      "name": "MemCompression",
+      "cpu_percent": 0.0,
+      "memory_percent": 4.55
+    },
+    {
+      "name": "CamoStudio.exe",
+      "cpu_percent": 0.0,
+      "memory_percent": 3.31
+    },
+    {
+      "name": "Discord.exe",
+      "cpu_percent": 0.0,
+      "memory_percent": 2.59
+    },
+    {
+      "name": "chrome.exe",
+      "cpu_percent": 0.0,
+      "memory_percent": 2.31
+    },
+    {
+      "name": "MsMpEng.exe",
+      "cpu_percent": 0.0,
+      "memory_percent": 2.14
+    },
+    {
+      "name": "WhatsApp.Root.exe",
+      "cpu_percent": 0.0,
+      "memory_percent": 1.73
+    },
+    {
+      "name": "explorer.exe",
+      "cpu_percent": 0.0,
+      "memory_percent": 1.65
+    },
+    {
+      "name": "Spotify.exe",
+      "cpu_percent": 0.0,
+      "memory_percent": 1.61
+    },
+    {
+      "name": "claude.exe",
+      "cpu_percent": 0.0,
+      "memory_percent": 1.55
+    },
+    {
+      "name": "Spotify.exe",
+      "cpu_percent": 0.0,
+      "memory_percent": 1.53
+    }
+  ],
+  "project_audit_summary": {
+    "scanned_files": 130,
+    "total_findings": 369,
+    "by_kind": {
+      "blocking_sleep": 321,
+      "infinite_loop": 18,
+      "hard_exit": 2,
+      "text_encoding": 28
+    }
+  },
+  "context_snapshot": {
+    "timestamp": "2026-05-05T11:23:51.870308",
+    "workspace": "C:\\Users\\Izoly\\Downloads\\Mark-XXX-main\\baki jarvis",
+    "cpu_percent": 76.9,
+    "memory_percent": 56.6,
+    "top_processes": [
+      "system idle process",
+      "system",
+      "fontdrvhost.exe",
+      "registry",
+      "msedge.exe",
+      "smss.exe",
+      "svchost.exe",
+      "csrss.exe",
+      "msedgewebview2.exe",
+      "svchost.exe",
+      "wininit.exe",
+      "csrss.exe",
+      "services.exe",
+      "lsass.exe",
+      "searchapp.exe",
+      "svchost.exe",
+      "explorer.exe",
+      "svchost.exe",
+      "auepmaster.exe",
+      "whatsapp.root.exe",
+      "winlogon.exe",
+      "fontdrvhost.exe",
+      "svchost.exe",
+      "crashpad_handler.exe",
+      "svchost.exe",
+      "svchost.exe",
+      "svchost.exe",
+      "svchost.exe",
+      "svchost.exe",
+      "svchost.exe"
+    ],
+    "signals": {
+      "opera_gx_active": false,
+      "browser_active": true,
+      "gaming_active": false,
+      "creative_tools_active": false
+    }
+  },
+  "intent_matrix": [
+    {
+      "intent": "system_status",
+      "score": 0.85
+    },
+    {
+      "intent": "search",
+      "score": 0.15
+    },
+    {
+      "intent": "open_app",
+      "score": 0.1
+    },
+    {
+      "intent": "focus_mode",
+      "score": 0.05
+    },
+    {
+      "intent": "workspace_mode",
+      "score": 0.05
+    }
+  ],
+  "fallback_protocols": {
+    "api": [
+      "Yerel yapılandırmayı yeniden yükle",
+      "Alternatif anahtar veya ikinci yapılandırma dosyasını dene",
+      "Yerel fallback çıktısı üret ve kullanıcı akışını durdurma"
+    ],
+    "audio": [
+      "Ses giriş aygıtını yeniden bağlamayı dene",
+      "Yalnızca yazılı transkripsiyon moduna düş",
+      "Durumu logla ve ana oturumu yeniden başlat"
+    ]
+  }
+}
