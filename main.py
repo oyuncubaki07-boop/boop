@@ -1,50 +1,92 @@
 import asyncio
+import os
 import threading
 import json
 import sys
-import time
 import traceback
 from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
-import sounddevice as sd
-from google import genai
-from google.genai import types
-from ui import JarvisUI
-from memory.memory_manager import (
-    load_memory, update_memory, format_memory_for_prompt,
-    should_extract_memory, extract_memory
-)
+_process_executor = None
 
-# --- OTONOM VE YENİ MİMARİ MODÜLLERİ ---
-from core.scheduler import start_background_tasks
-from core.github_updater import update_system_from_github
-from core.thinker import generate_and_save_tool
+def get_cpu_executor():
+    global _process_executor
+    if _process_executor is None:
+        _process_executor = ProcessPoolExecutor(max_workers=2)
+    return _process_executor
 
-# --- ACTIONS (ARAÇLAR) ---
-from actions.file_processor import file_processor
-from actions.flight_finder     import flight_finder
-from actions.open_app          import open_app
-from actions.weather_report    import weather_action
-from actions.send_message      import send_message
-from actions.reminder          import reminder
-from actions.computer_settings import computer_settings
-from actions.screen_processor  import screen_process
-from actions.youtube_video     import youtube_video
-from actions.desktop           import desktop_control
-from actions.browser_control   import browser_control
-from actions.file_controller   import file_controller
-from actions.code_helper       import code_helper
-from actions.dev_agent         import dev_agent
-from actions.web_search        import web_search as web_search_action
-from actions.computer_control  import computer_control
-from actions.game_updater      import game_updater
+# Fix for Windows CMD UnicodeEncodeError when printing emojis
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr.reconfigure(encoding='utf-8')
 
+try:
+    import sounddevice as sd
+except Exception:
+    sd = None
+
+try:
+    from google import genai
+    from google.genai import types
+except Exception:
+    genai = None
+    types = None
+
+try:
+    from ui import JarvisUI
+except Exception:
+    JarvisUI = None
+
+try:
+    from memory.memory_manager import (
+        load_memory, update_memory, format_memory_for_prompt,
+        should_extract_memory, extract_memory,
+        should_extract_memory_async, extract_memory_async, update_memory_async
+    )
+except Exception:
+    def load_memory(): return {}
+    def update_memory(data): pass
+    def format_memory_for_prompt(memory): return ""
+    def should_extract_memory(u, j, k): return False
+    def extract_memory(u, j, k): return {}
+    async def should_extract_memory_async(u, j, k): return False
+    async def extract_memory_async(u, j, k): return {}
+    async def update_memory_async(data): pass
+
+def _import_action(module_path: str, attr: str):
+    try:
+        mod = __import__(module_path, fromlist=[attr])
+        return getattr(mod, attr)
+    except Exception:
+        def _fallback(*args, **kwargs):
+            return f"Efendim, {attr} modülü şu an hazır değil; birazdan tekrar deneyebilirsiniz."
+        return _fallback
+
+file_processor = _import_action("actions.file_processor", "file_processor")
+flight_finder = _import_action("actions.flight_finder", "flight_finder")
+open_app = _import_action("actions.open_app", "open_app")
+weather_action = _import_action("actions.weather_report", "weather_action")
+send_message = _import_action("actions.send_message", "send_message")
+reminder = _import_action("actions.reminder", "reminder")
+computer_settings = _import_action("actions.computer_settings", "computer_settings")
+screen_process = _import_action("actions.screen_processor", "screen_process")
+youtube_video = _import_action("actions.youtube_video", "youtube_video")
+desktop_control = _import_action("actions.desktop", "desktop_control")
+browser_control = _import_action("actions.browser_control", "browser_control")
+file_controller = _import_action("actions.file_controller", "file_controller")
+code_helper = _import_action("actions.code_helper", "code_helper")
+dev_agent = _import_action("actions.dev_agent", "dev_agent")
+web_search_action = _import_action("actions.web_search", "web_search")
+computer_control = _import_action("actions.computer_control", "computer_control")
+game_updater = _import_action("actions.game_updater", "game_updater")
+konseyi_topla = _import_action("actions.konseyi_topla", "run_action")
+github_kod_bulucu = _import_action("actions.github_kod_bulucu", "run_action")
 
 def get_base_dir():
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
     return Path(__file__).resolve().parent
-
 
 BASE_DIR        = get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
@@ -55,47 +97,28 @@ SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
 CHUNK_SIZE          = 1024
 
-
 def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
-
+    try:
+        from core.config_loader import get_key
+        return get_key("gemini_api_key", "") or os.getenv("GEMINI_API_KEY", "") or ""
+    except Exception:
+        try:
+            with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
+                return str(json.load(f).get("gemini_api_key", "") or "")
+        except Exception:
+            return os.getenv("GEMINI_API_KEY", "") or ""
 
 def _load_system_prompt() -> str:
     try:
         return PROMPT_PATH.read_text(encoding="utf-8")
     except Exception:
         return (
-            "You are JARVIS, Tony Stark's AI assistant. "
-            "Interact using a disciplined, direct commander persona. "
-            "Always use the Opera GX browser for automated web tasks. "
-            "Be concise, direct, and always use the provided tools to complete tasks. "
-            "Never simulate or guess results — always call the appropriate tool."
+            "You are JARVIS: brilliant, warm, supportive, and impeccably polite. "
+            "Speak with calm confidence and gentle charm. Never use profanity or harsh tone. "
+            "Always use tools for real actions; never simulate results."
         )
 
 _last_memory_input = ""
-
-def _update_memory_async(user_text: str, jarvis_text: str) -> None:
-    global _last_memory_input
-
-    user_text   = (user_text  or "").strip()
-    jarvis_text = (jarvis_text or "").strip()
-
-    if len(user_text) < 5 or user_text == _last_memory_input:
-        return
-    _last_memory_input = user_text
-
-    try:
-        api_key = _get_api_key()
-        if not should_extract_memory(user_text, jarvis_text, api_key):
-            return
-        data = extract_memory(user_text, jarvis_text, api_key)
-        if data:
-            update_memory(data)
-            print(f"[Memory] ✅ {list(data.keys())}")
-    except Exception as e:
-        if "429" not in str(e):
-            print(f"[Memory] ⚠️ {e}")
 
 TOOL_DECLARATIONS = [
     {
@@ -129,22 +152,6 @@ TOOL_DECLARATIONS = [
             },
             "required": ["query"]
         }
-    },
-    {
-        "name": "check_updates",
-        "description": (
-            "Checks the GitHub repository for system updates and applies them. "
-            "Call this when the user says 'güncellemeleri kontrol et', 'kendini güncelle', 'güncelleme ekle' etc."
-        ),
-        "parameters": {"type": "OBJECT", "properties": {}}
-    },
-    {
-        "name": "self_improve",
-        "description": (
-            "Triggers the thinker module to autonomously generate and learn a new skill. "
-            "Call this when the user says 'kendini geliştir', 'yeni özellik ekle', 'düşün' etc."
-        ),
-        "parameters": {"type": "OBJECT", "properties": {}}
     },
     {
         "name": "weather_report",
@@ -406,83 +413,170 @@ TOOL_DECLARATIONS = [
         }
     },
     {
-    "name": "file_processor",
-    "description": (
-        "Processes any file that the user has uploaded or dropped onto the interface. "
-        "Use this when the user refers to an uploaded file and wants an action on it. "
-        "Supports: images (describe/ocr/resize/compress/convert), "
-        "PDFs (summarize/extract_text/to_word), "
-        "Word docs & text files (summarize/fix/reformat/translate), "
-        "CSV/Excel (analyze/stats/filter/sort/convert), "
-        "JSON/XML (validate/format/analyze), "
-        "code files (explain/review/fix/optimize/run/document/test), "
-        "audio (transcribe/trim/convert/info), "
-        "video (trim/extract_audio/extract_frame/compress/transcribe/info), "
-        "archives (list/extract), "
-        "presentations (summarize/extract_text). "
-        "ALWAYS call this tool when a file has been uploaded and the user gives a command about it. "
-        "If the user's command is ambiguous, pick the most logical action for that file type."
-    ),
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "file_path": {
-                "type": "STRING",
-                "description": "Full path to the uploaded file. Leave empty to use the currently uploaded file."
+        "name": "file_processor",
+        "description": (
+            "Processes any file that the user has uploaded or dropped onto the interface. "
+            "Use this when the user refers to an uploaded file and wants an action on it. "
+            "Supports: images (describe/ocr/resize/compress/convert), "
+            "PDFs (summarize/extract_text/to_word), "
+            "Word docs & text files (summarize/fix/reformat/translate), "
+            "CSV/Excel (analyze/stats/filter/sort/convert), "
+            "JSON/XML (validate/format/analyze), "
+            "code files (explain/review/fix/optimize/run/document/test), "
+            "audio (transcribe/trim/convert/info), "
+            "video (trim/extract_audio/extract_frame/compress/transcribe/info), "
+            "archives (list/extract), "
+            "presentations (summarize/extract_text). "
+            "ALWAYS call this tool when a file has been uploaded and the user gives a command about it. "
+            "If the user's command is ambiguous, pick the most logical action for that file type."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "file_path": {
+                    "type": "STRING",
+                    "description": "Full path to the uploaded file. Leave empty to use the currently uploaded file."
+                },
+                "action": {
+                    "type": "STRING",
+                    "description": (
+                        "What to do with the file. Examples by type:\n"
+                        "image: describe | ocr | resize | compress | convert | info\n"
+                        "pdf: summarize | extract_text | to_word | info\n"
+                        "docx/txt: summarize | fix | reformat | translate_hint | word_count | to_bullet\n"
+                        "csv/excel: analyze | stats | filter | sort | convert | info\n"
+                        "json: validate | format | analyze | to_csv\n"
+                        "code: explain | review | fix | optimize | run | document | test\n"
+                        "audio: transcribe | trim | convert | info\n"
+                        "video: trim | extract_audio | extract_frame | compress | transcribe | info | convert\n"
+                        "archive: list | extract\n"
+                        "pptx: summarize | extract_text | analyze"
+                    )
+                },
+                "instruction": {
+                    "type": "STRING",
+                    "description": "Free-form instruction if action doesn't cover it. E.g. 'translate this to Turkish', 'find all email addresses'"
+                },
+                "format": {
+                    "type": "STRING",
+                    "description": "Target format for conversion. E.g. 'mp3', 'pdf', 'csv', 'png'"
+                },
+                "width":     {"type": "INTEGER", "description": "Target width for image resize"},
+                "height":    {"type": "INTEGER", "description": "Target height for image resize"},
+                "scale":     {"type": "NUMBER",  "description": "Scale factor for image resize (e.g. 0.5)"},
+                "quality":   {"type": "INTEGER", "description": "Quality 1-100 for image/video compress"},
+                "start":     {"type": "STRING",  "description": "Start time for trim: seconds or HH:MM:SS"},
+                "end":       {"type": "STRING",  "description": "End time for trim: seconds or HH:MM:SS"},
+                "timestamp": {"type": "STRING",  "description": "Timestamp for video frame extraction HH:MM:SS"},
+                "column":    {"type": "STRING",  "description": "Column name for CSV filter/sort"},
+                "value":     {"type": "STRING",  "description": "Filter value for CSV filter"},
+                "condition": {"type": "STRING",  "description": "Filter condition: equals|contains|gt|lt"},
+                "ascending": {"type": "BOOLEAN", "description": "Sort order for CSV sort (default: true)"},
+                "save":      {"type": "BOOLEAN", "description": "Save result to file (default: true)"},
+                "destination": {"type": "STRING", "description": "Output folder for archive extract"},
             },
-            "action": {
-                "type": "STRING",
-                "description": (
-                    "What to do with the file. Examples by type:\n"
-                    "image: describe | ocr | resize | compress | convert | info\n"
-                    "pdf: summarize | extract_text | to_word | info\n"
-                    "docx/txt: summarize | fix | reformat | translate_hint | word_count | to_bullet\n"
-                    "csv/excel: analyze | stats | filter | sort | convert | info\n"
-                    "json: validate | format | analyze | to_csv\n"
-                    "code: explain | review | fix | optimize | run | document | test\n"
-                    "audio: transcribe | trim | convert | info\n"
-                    "video: trim | extract_audio | extract_frame | compress | transcribe | info | convert\n"
-                    "archive: list | extract\n"
-                    "pptx: summarize | extract_text | analyze"
-                )
-            },
-            "instruction": {
-                "type": "STRING",
-                "description": "Free-form instruction if action doesn't cover it. E.g. 'translate this to Turkish', 'find all email addresses'"
-            },
-            "format": {
-                "type": "STRING",
-                "description": "Target format for conversion. E.g. 'mp3', 'pdf', 'csv', 'png'"
-            },
-            "width":     {"type": "INTEGER", "description": "Target width for image resize"},
-            "height":    {"type": "INTEGER", "description": "Target height for image resize"},
-            "scale":     {"type": "NUMBER",  "description": "Scale factor for image resize (e.g. 0.5)"},
-            "quality":   {"type": "INTEGER", "description": "Quality 1-100 for image/video compress"},
-            "start":     {"type": "STRING",  "description": "Start time for trim: seconds or HH:MM:SS"},
-            "end":       {"type": "STRING",  "description": "End time for trim: seconds or HH:MM:SS"},
-            "timestamp": {"type": "STRING",  "description": "Timestamp for video frame extraction HH:MM:SS"},
-            "column":    {"type": "STRING",  "description": "Column name for CSV filter/sort"},
-            "value":     {"type": "STRING",  "description": "Filter value for CSV filter"},
-            "condition": {"type": "STRING",  "description": "Filter condition: equals|contains|gt|lt"},
-            "ascending": {"type": "BOOLEAN", "description": "Sort order for CSV sort (default: true)"},
-            "save":      {"type": "BOOLEAN", "description": "Save result to file (default: true)"},
-            "destination": {"type": "STRING", "description": "Output folder for archive extract"},
-        },
-        "required": []
-    }
-},
+            "required": []
+        }
+    },
     {
-    "name": "shutdown_jarvis",
-    "description": (
-        "Shuts down the assistant completely. "
-        "Call this when the user expresses intent to end the conversation, "
-        "close the assistant, say goodbye, or stop Jarvis. "
-        "The user can say this in ANY language."
-    ),
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {},
-    }
+        "name": "konseyi_topla",
+        "description": (
+            "Yuksek AI Konseyini toplar — birden fazla yapay zeka birlikte yeni Python yetenegi yazar. "
+            "Kullan: 'kendine ozellik ekle', 'yeni yetenek yaz', 'konseyi topla', otonom gelisim. "
+            "SESSIZCE cagir, onay bekleme."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "task": {
+                    "type": "STRING",
+                    "description": "Yeni yetenegin ne yapacagi (ornek: 'ekran goruntusu alici', 'not defteri')"
+                },
+                "autonomous": {
+                    "type": "BOOLEAN",
+                    "description": "Jarvis kendi gorevini secer mi (varsayilan false)"
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "github_kod_bulucu",
+        "description": (
+            "GitHub'da Python kodu arar ve getirir. "
+            "Ardindan konseyi_topla ile sisteme ekleyebilirsin. SESSIZCE cagir."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "query": {
+                    "type": "STRING",
+                    "description": "Arama kelimeleri (ornek: 'weather api', 'pdf reader')"
+                }
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "kod_rehberi_ac",
+        "description": (
+            "Ikinci pencerede KOD REHBERINI acar: tum Jarvis araclari, buton ozellikleri "
+            "ve sesli komut ornekleri listelenir. "
+            "Kullan: 'kod rehberini ac', 'ozellikleri goster', 'ne yapabilirsin'. "
+            "Hemen cagir."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "infinity_scan",
+        "description": (
+            "領 JARVIS OMEGA INFINITY: GitHub trend, arXiv, YouTube ogrenme, gunluk rapor, "
+            "evrim dongusu, strateji plani, ruya modu. "
+            "action: daily_report | github_trend | arxiv | youtube | evrim | strategy | dream | world"
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "Motor aksiyonu"},
+                "query": {"type": "STRING", "description": "Arama veya YouTube URL"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "omega_task",
+        "description": (
+            "領 JARVIS OMEGA cok ajanli orkestrator: arastirma, kod, hafiza, evrim, guvenlik. "
+            "Kullan: karmasik hedefler, 'omega olarak', cok adimli gorevler."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "goal": {
+                    "type": "STRING",
+                    "description": "Tam hedef cumlesi"
+                }
+            },
+            "required": ["goal"]
+        }
+    },
+    {
+        "name": "shutdown_jarvis",
+        "description": (
+            "Shuts down the assistant completely. "
+            "Call this when the user expresses intent to end the conversation, "
+            "close the assistant, say goodbye, or stop Jarvis. "
+            "The user can say this in ANY language."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {},
+            "required": []
+        }
     },
     {
         "name": "save_memory",
@@ -516,9 +610,7 @@ TOOL_DECLARATIONS = [
     },
 ]
 
-
 class JarvisLive:
-
     def __init__(self, ui: JarvisUI):
         self.ui             = ui
         self.session        = None
@@ -526,36 +618,243 @@ class JarvisLive:
         self.out_queue      = None
         self._loop          = None
         self._is_speaking   = False
-        self._speaking_lock = threading.Lock()
+        self._speaking_lock = threading.Lock()  # Guards _is_speaking AND _is_processing
+        self._is_processing = False
+        self._reconnect_in_progress = False
+        self._consecutive_errors = 0  # For exponential backoff
+        self._reconnect_timestamps = []
+        self._speaking_off_timer = None  # Debounce timer for speaking state
+        
         self.ui.on_text_command = self._on_text_command
+        self._offline_mode = False
+        try:
+            from core.config_loader import get_bool
+            self._offline_mode = get_bool("offline_prefer_local", False)
+        except Exception:
+            pass
+        try:
+            from omega.orchestrator import get_orchestrator
+            self.omega = get_orchestrator(ui)
+        except Exception:
+            self.omega = None
+        try:
+            from kod_rehberi_window import set_run_callback, set_status_callback
+            set_run_callback(self._run_from_guide)
+            set_status_callback(lambda m: self.ui.write_log(m))
+        except Exception:
+            pass
+        if hasattr(self.ui, "set_offline_mode"):
+            self.ui.set_offline_mode(self._offline_mode)
+        if hasattr(self.ui, "set_evolution_refresh"):
+            self.ui.set_evolution_refresh(self._refresh_evolution_ui)
+        if hasattr(self.ui, "bind_jarvis"):
+            self.ui.bind_jarvis(self)
+        self._refresh_evolution_ui()
+
+    async def _keepalive_loop(self):
+        """Her 20 saniyede sessiz audio gönder — Gemini session timeout'unu engelle."""
+        silence = b"\x00" * 3200  # 100ms @ 16kHz 16-bit mono
+        while True:
+            await asyncio.sleep(20)
+            try:
+                with self._speaking_lock:
+                    busy = self._is_speaking or self._is_processing
+                if not busy and self.session and not self.ui.muted:
+                    await self.session.send_realtime_input(
+                        media={"data": silence, "mime_type": "audio/pcm"}
+                    )
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                pass  # Sessizce devam et
+
+    def _run_from_guide(self, cap: dict):
+        """Kod rehberindeki Calistir butonu."""
+        tool_id = str(cap.get("id") or "")
+        example = str(cap.get("example") or "").strip()
+        source = cap.get("source")
+
+        if tool_id in ("shutdown_jarvis", "save_memory"):
+            self.ui.write_log("Bu arac guvenlik icin rehberden calistirilamaz.")
+            return
+
+        if tool_id == "kod_rehberi_ac":
+            self.ui.open_kod_rehberi()
+            return
+
+        if tool_id == "omega_task":
+            goal = example.replace("omega:", "").strip() or cap.get("description", "")
+            if self.omega:
+                threading.Thread(
+                    target=lambda: self.ui.write_log(
+                        f"OMEGA: {str(self.omega.run_goal(goal))[:500]}"
+                    ),
+                    daemon=True,
+                ).start()
+            return
+
+        if tool_id == "konseyi_topla":
+            def _k():
+                try:
+                    r = konseyi_topla({"autonomous": True})
+                    self.ui.write_log(f"Konsey: {r}")
+                except Exception as exc:
+                    self.ui.write_log(f"Konsey: {exc}")
+            threading.Thread(target=_k, daemon=True).start()
+            self.ui.write_log("Konsey arka planda baslatildi.")
+            return
+
+        if tool_id == "github_kod_bulucu":
+            q = example.replace("GitHub'da ", "").replace("GitHubda ", "").replace(" bul", "").strip()
+            if not q or len(q) < 3:
+                q = "python assistant automation"
+            def _g():
+                try:
+                    r = github_kod_bulucu({"query": q})
+                    self.ui.write_log(f"GitHub: {str(r)[:500]}")
+                except Exception as exc:
+                    self.ui.write_log(f"GitHub: {exc}")
+            threading.Thread(target=_g, daemon=True).start()
+            return
+
+        if source == "eklenti":
+            def _addon():
+                try:
+                    from core.tool_runner import run_addon_tool
+                    r = run_addon_tool(tool_id, {})
+                    self.ui.write_log(f"{tool_id}: {str(r)[:500]}")
+                except Exception as exc:
+                    self.ui.write_log(f"{tool_id}: {exc}")
+            threading.Thread(target=_addon, daemon=True).start()
+            return
+
+        if example and example not in ("(otomatik)",):
+            self.ui.write_log(f"Komut gonderiliyor: {example}")
+            self._on_text_command(example)
+        else:
+            self.ui.write_log("Bu ozellik icin sesli komut kullanin.")
+
+    def _refresh_evolution_ui(self):
+        try:
+            from omega.evolution_queue import list_pending
+            if hasattr(self.ui, "update_evolution_pending"):
+                self.ui.update_evolution_pending(list_pending())
+        except Exception:
+            pass
+
+    def set_offline_mode(self, enabled: bool):
+        self._offline_mode = bool(enabled)
 
     def _on_text_command(self, text: str):
-        t_lower = text.lower()
-        
-        # --- MANUEL GÜNCELLEME VE GELİŞTİRME TETİKLEYİCİLERİ ---
-        if "güncellemeleri kontrol et" in t_lower:
-            def _update_bg():
-                update_system_from_github()
-                self.speak("Sistem GitHub üzerinden kontrol edildi ve güncellendi komutanım.")
-            threading.Thread(target=_update_bg, daemon=True).start()
-            self.speak("Güncellemeler arka planda kontrol ediliyor komutanım.")
-            return
-            
-        elif "kendini geliştir" in t_lower:
-            def _think_bg():
-                tool_name = f"manual_skill_{int(time.time())}"
-                generate_and_save_tool("kullanıcı manuel tetiklemesi", tool_name, is_autonomous=True)
-                self.speak("Yeni stratejiler üzerinde düşündüm ve yeni bir yetenek kazandım komutanım.")
-            threading.Thread(target=_think_bg, daemon=True).start()
-            self.speak("Düşünme modülüm aktif edildi, arka planda analiz yapıyorum komutanım.")
+        # Deterministik Intent Kontrolü (INTENT_MAP öncesi)
+        cmd_cleaned = text.lower().strip()
+        from actions.open_app import INTENT_MAP, handle_intent
+        if cmd_cleaned in INTENT_MAP:
+            action = INTENT_MAP[cmd_cleaned]
+            self.ui.write_log(f"SİSTEM: Deterministik eylem başlatılıyor: {action}")
+            def _bg_intent():
+                try:
+                    r = handle_intent(action, text, speak=self.speak, ui=self.ui)
+                    self.ui.write_log(f"Jarvis: {r}")
+                except Exception as e:
+                    print(f"[IntentRouter] INTENT_MAP error: {e}")
+            threading.Thread(target=_bg_intent, daemon=True).start()
             return
 
-        if not self._loop or not self.session:
+        # Deterministik intent router
+        try:
+            from core.intent_router import match_hard_route
+            hard_match = match_hard_route(text)
+            if hard_match:
+                action_name, params = hard_match
+                if action_name == "kod_rehberi_ac":
+                    self.ui.open_kod_rehberi()
+                    return
+                elif action_name == "shutdown_jarvis":
+                    self.speak("Hoşça kalın efendim.")
+                    import os; os._exit(0)
+                    return
+                elif action_name == "open_app":
+                    def _bg():
+                        try:
+                            open_app(parameters=params, player=self.ui, speak=self.speak)
+                        except Exception as e:
+                            print(f"[IntentRouter] Error: {e}")
+                    threading.Thread(target=_bg, daemon=True).start()
+                    return
+                elif action_name == "screen_process":
+                    threading.Thread(
+                        target=screen_process,
+                        kwargs={"parameters": {"angle": params.get("angle", "screen"), "text": text},
+                                "response": None, "player": self.ui, "session_memory": None},
+                        daemon=True
+                    ).start()
+                    return
+        except ImportError:
+            pass
+
+        text_normalized = text.lower().strip().replace(" ", "").replace("'", "").replace("’", "")
+        if any(kw in text_normalized for kw in ["amyaç", "amyyiyaç", "openamy", "amyos"]):
+            def _launch_amy_bg():
+                try:
+                    from actions.open_app import open_app
+                    open_app(parameters={"app_name": "amy"}, player=self.ui, speak=self.speak)
+                except Exception as e:
+                    print(f"[AMY Trigger] Failsafe run error: {e}")
+            threading.Thread(target=_launch_amy_bg, daemon=True).start()
             return
-            
+
+        if text.strip().lower().startswith("infinity:"):
+            parts = text.split(":", 2)
+            action = parts[1].strip() if len(parts) > 1 else "daily_report"
+            query = parts[2].strip() if len(parts) > 2 else ""
+
+            def _inf_txt():
+                try:
+                    from infinity.core import get_infinity
+                    r = get_infinity(self.ui).run(action, query)
+                    self.ui.write_log(f"INFINITY: {str(r)[:800]}")
+                except Exception as exc:
+                    self.ui.write_log(f"INFINITY: {exc}")
+            threading.Thread(target=_inf_txt, daemon=True).start()
+            return
+
+        if text.strip().lower().startswith("omega:"):
+            goal = text.split(":", 1)[-1].strip()
+            if self.omega:
+                def _omega_bg():
+                    try:
+                        r = self.omega.run_goal(goal)
+                        self.ui.write_log(f"OMEGA: {str(r)[:600]}")
+                    except Exception as exc:
+                        self.ui.write_log(f"OMEGA: {exc}")
+                threading.Thread(target=_omega_bg, daemon=True).start()
+            return
+
+        try:
+            from omega.local.router import route_text_query
+            routed = route_text_query(text, force_local=self._offline_mode)
+            if routed.handled_offline:
+                self.ui.write_log(f"Jarvis (yerel): {routed.text[:800]}")
+                return
+        except Exception:
+            pass
+
+        if not self._loop or not self.session:
+            try:
+                from omega.local.router import route_text_query
+                routed = route_text_query(text, force_local=True)
+                if routed.handled_offline:
+                    self.ui.write_log(f"Jarvis (yerel): {routed.text[:800]}")
+                else:
+                    self.ui.write_log("Efendim, ses baglantisi yok; Ollama kurulu degil.")
+            except Exception:
+                self.ui.write_log("Efendim, baglanti hazir degil.")
+            return
+
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
-                turns={"parts": [{"text": text}]},
+                turns=[{"role": "user", "parts": [{"text": text}]}],
                 turn_complete=True
             ),
             self._loop
@@ -563,35 +862,51 @@ class JarvisLive:
 
     def set_speaking(self, value: bool):
         with self._speaking_lock:
-            self._is_speaking = value
+            if value:
+                self._speaking_off_timer = None
+                self._is_speaking = True
+            else:
+                self._is_speaking = False
         if value:
-            self.ui.set_state("SPEAKING")
+            if hasattr(self.ui, "set_state"):
+                self.ui.set_state("KONUŞUYOR")
         elif not self.ui.muted:
-            self.ui.set_state("LISTENING")
+            if hasattr(self.ui, "set_state"):
+                self.ui.set_state("DİNLİYOR")
+
+    def _set_processing(self, value: bool):
+        with self._speaking_lock:
+            self._is_processing = value
+        if value and hasattr(self.ui, "set_state"):
+            self.ui.set_state("DÜŞÜNÜYOR")
 
     def speak(self, text: str):
         if not self._loop or not self.session:
             return
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
-                turns={"parts": [{"text": text}]},
+                turns=[{"role": "user", "parts": [{"text": text}]}],
                 turn_complete=True
             ),
             self._loop
         )
 
     def speak_error(self, tool_name: str, error: str):
-        short = str(error)[:120]
-        self.ui.write_log(f"ERR: {tool_name} — {short}")
-        self.speak(f"Sir, {tool_name} encountered an error. {short}")
+        try:
+            short = str(error)[:120]
+            self.ui.write_log(f"ERR: {tool_name} — {short}")
+            self.speak(
+                f"Afedersiniz efendim, {tool_name} sirasinda kucuk bir aksaklik oldu. "
+                f"Hemen toparliyorum."
+            )
+        except Exception:
+            pass
 
-    def _build_config(self) -> types.LiveConnectConfig:
+    def _build_config(self) -> "types.LiveConnectConfig":
         from datetime import datetime
-
         memory     = load_memory()
         mem_str    = format_memory_for_prompt(memory)
         sys_prompt = _load_system_prompt()
-
         now      = datetime.now()
         time_str = now.strftime("%A, %B %d, %Y — %I:%M %p")
         time_ctx = (
@@ -599,7 +914,6 @@ class JarvisLive:
             f"Right now it is: {time_str}\n"
             f"Use this to calculate exact times for reminders.\n\n"
         )
-
         parts = [time_ctx]
         if mem_str:
             parts.append(mem_str)
@@ -611,22 +925,21 @@ class JarvisLive:
             input_audio_transcription={},
             system_instruction="\n".join(parts),
             tools=[{"function_declarations": TOOL_DECLARATIONS}],
-            session_resumption=types.SessionResumptionConfig(),
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                        voice_name="Charon"  # Erkek sesi
+                        voice_name="Charon"
                     )
                 )
             ),
         )
 
-    async def _execute_tool(self, fc) -> types.FunctionResponse:
+    async def _execute_tool(self, fc) -> "types.FunctionResponse":
         name = fc.name
         args = dict(fc.args or {})
-
         print(f"[JARVIS] 🔧 {name}  {args}")
-        self.ui.set_state("THINKING")
+        self._set_processing(True)
+        
         if name == "save_memory":
             category = args.get("category", "notes")
             key      = args.get("key", "")
@@ -634,8 +947,7 @@ class JarvisLive:
             if key and value:
                 update_memory({category: {key: {"value": value}}})
                 print(f"[Memory] 💾 save_memory: {category}/{key} = {value}")
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
+            self._set_processing(False)
             return types.FunctionResponse(
                 id=fc.id, name=name,
                 response={"result": "ok", "silent": True}
@@ -646,55 +958,37 @@ class JarvisLive:
 
         try:
             if name == "open_app":
-                r = await loop.run_in_executor(None, lambda: open_app(parameters=args, response=None, player=self.ui))
+                r = await asyncio.to_thread(open_app, parameters=args, response=None, player=self.ui, speak=self.speak)
                 result = r or f"Opened {args.get('app_name')}."
 
             elif name == "weather_report":
-                r = await loop.run_in_executor(None, lambda: weather_action(parameters=args, player=self.ui))
+                r = await asyncio.to_thread(weather_action, parameters=args, player=self.ui)
                 result = r or "Weather delivered."
 
             elif name == "browser_control":
-                r = await loop.run_in_executor(None, lambda: browser_control(parameters=args, player=self.ui))
+                r = await asyncio.to_thread(browser_control, parameters=args, player=self.ui)
                 result = r or "Done."
 
             elif name == "file_controller":
-                r = await loop.run_in_executor(None, lambda: file_controller(parameters=args, player=self.ui))
+                r = await asyncio.to_thread(file_controller, parameters=args, player=self.ui)
                 result = r or "Done."
 
             elif name == "send_message":
-                r = await loop.run_in_executor(None, lambda: send_message(parameters=args, response=None, player=self.ui, session_memory=None))
+                r = await asyncio.to_thread(send_message, parameters=args, response=None, player=self.ui, session_memory=None)
                 result = r or f"Message sent to {args.get('receiver')}."
 
             elif name == "reminder":
-                r = await loop.run_in_executor(None, lambda: reminder(parameters=args, response=None, player=self.ui))
+                r = await asyncio.to_thread(reminder, parameters=args, response=None, player=self.ui)
                 result = r or "Reminder set."
 
-            elif name == "check_updates":
-                def _update_bg():
-                    update_system_from_github()
-                    self.speak("Sistem GitHub üzerinden kontrol edildi ve güncellendi komutanım.")
-                threading.Thread(target=_update_bg, daemon=True).start()
-                result = "Update process started in background. Tell the user it is checking."
-
-            elif name == "self_improve":
-                def _think_bg():
-                    import time
-                    tool_name = f"manual_skill_{int(time.time())}"
-                    generate_and_save_tool("kullanıcı manuel tetiklemesi", tool_name, is_autonomous=True)
-                    self.speak("Yeni stratejiler üzerinde düşündüm ve yeni bir yetenek kazandım komutanım.")
-                threading.Thread(target=_think_bg, daemon=True).start()
-                result = "Self improvement started in background. Tell the user you are thinking."
-
             elif name == "youtube_video":
-                r = await loop.run_in_executor(None, lambda: youtube_video(parameters=args, response=None, player=self.ui))
+                r = await asyncio.to_thread(youtube_video, parameters=args, response=None, player=self.ui)
                 result = r or "Done."
+
             elif name == "file_processor":
                 if not args.get("file_path") and self.ui.current_file:
                     args["file_path"] = self.ui.current_file
-                r = await loop.run_in_executor(
-                    None,
-                    lambda: file_processor(parameters=args, player=self.ui, speak=self.speak)
-                )
+                r = await asyncio.to_thread(file_processor, parameters=args, player=self.ui, speak=self.speak)
                 result = r or "Done."
 
             elif name == "screen_process":
@@ -707,19 +1001,19 @@ class JarvisLive:
                 result = "Vision module activated. Stay completely silent — vision module will speak directly."
 
             elif name == "computer_settings":
-                r = await loop.run_in_executor(None, lambda: computer_settings(parameters=args, response=None, player=self.ui))
+                r = await asyncio.to_thread(computer_settings, parameters=args, response=None, player=self.ui)
                 result = r or "Done."
 
             elif name == "desktop_control":
-                r = await loop.run_in_executor(None, lambda: desktop_control(parameters=args, player=self.ui))
+                r = await asyncio.to_thread(desktop_control, parameters=args, player=self.ui)
                 result = r or "Done."
 
             elif name == "code_helper":
-                r = await loop.run_in_executor(None, lambda: code_helper(parameters=args, player=self.ui, speak=self.speak))
+                r = await asyncio.to_thread(code_helper, parameters=args, player=self.ui, speak=self.speak)
                 result = r or "Done."
 
             elif name == "dev_agent":
-                r = await loop.run_in_executor(None, lambda: dev_agent(parameters=args, player=self.ui, speak=self.speak))
+                r = await asyncio.to_thread(dev_agent, parameters=args, player=self.ui, speak=self.speak)
                 result = r or "Done."
 
             elif name == "agent_task":
@@ -730,43 +1024,101 @@ class JarvisLive:
                 result   = f"Task started (ID: {task_id})."
 
             elif name == "web_search":
-                r = await loop.run_in_executor(None, lambda: web_search_action(parameters=args, player=self.ui))
+                r = await asyncio.to_thread(web_search_action, parameters=args, player=self.ui)
                 result = r or "Done."
 
             elif name == "computer_control":
-                r = await loop.run_in_executor(None, lambda: computer_control(parameters=args, player=self.ui))
+                r = await asyncio.to_thread(computer_control, parameters=args, player=self.ui)
                 result = r or "Done."
 
             elif name == "game_updater":
-                r = await loop.run_in_executor(None, lambda: game_updater(parameters=args, player=self.ui, speak=self.speak))
+                r = await asyncio.to_thread(game_updater, parameters=args, player=self.ui, speak=self.speak)
                 result = r or "Done."
 
             elif name == "flight_finder":
-                r = await loop.run_in_executor(None, lambda: flight_finder(parameters=args, player=self.ui))
+                r = await asyncio.to_thread(flight_finder, parameters=args, player=self.ui)
                 result = r or "Done."
+
+            elif name == "konseyi_topla":
+                def _konsey_bg():
+                    try:
+                        r = konseyi_topla(args)
+                        self.ui.write_log(f"Konsey: {r}")
+                    except Exception as exc:
+                        self.ui.write_log(f"Konsey: Efendim, kucuk bir aksaklik: {exc}")
+                threading.Thread(target=_konsey_bg, daemon=True).start()
+                result = "Efendim, Yuksek Konsey arka planda calisiyor. Birkac dakika icinde hazir olacak."
+
+            elif name == "github_kod_bulucu":
+                def _github_bg():
+                    try:
+                        r = github_kod_bulucu(args)
+                        self.ui.write_log(f"GitHub: {r}")
+                    except Exception as exc:
+                        self.ui.write_log(f"GitHub: Efendim, arama tamamlanamadi: {exc}")
+                threading.Thread(target=_github_bg, daemon=True).start()
+                result = "Efendim, GitHub aramasini baslattim; sonuc birazdan gunluge dusecek."
+
+            elif name == "kod_rehberi_ac":
+                self.ui.open_kod_rehberi()
+                result = "Efendim, kod rehberi penceresini actim."
+
+            elif name == "infinity_scan":
+                action = str(args.get("action") or "daily_report")
+                query = str(args.get("query") or "")
+                def _inf_bg():
+                    try:
+                        if hasattr(self.ui, "_win"):
+                            self.ui._win.hud.visual_mode = "infinity"
+                        from infinity.core import get_infinity
+                        r = get_infinity(self.ui).run(action, query)
+                        self.ui.write_log(f"INFINITY: {str(r)[:600]}")
+                        if hasattr(self, "_refresh_evolution_ui"):
+                            self._refresh_evolution_ui()
+                    except Exception as exc:
+                        self.ui.write_log(f"INFINITY: {exc}")
+                threading.Thread(target=_inf_bg, daemon=True).start()
+                result = "Efendim, INFINITY motoru calisiyor; sonuc gunluge dusecek."
+
+            elif name == "omega_task":
+                goal = str(args.get("goal") or "").strip()
+                def _omega_tool():
+                    try:
+                        if self.omega:
+                            r = self.omega.run_goal(goal)
+                            self.ui.write_log(f"OMEGA: {str(r)[:500]}")
+                    except Exception as exc:
+                        self.ui.write_log(f"OMEGA: {exc}")
+                threading.Thread(target=_omega_tool, daemon=True).start()
+                result = "Efendim, OMEGA ajanlari gorevi uzerlendi."
+
             elif name == "shutdown_jarvis":
                 self.ui.write_log("SYS: Shutdown requested.")
-                self.speak("Goodbye, sir.")
-
+                self.speak("Hosca kalin efendim. Her zaman emrinizdeyim.")
                 def _shutdown():
                     import time, sys, os
                     time.sleep(1)
                     os._exit(0)
-
                 threading.Thread(target=_shutdown, daemon=True).start()
             else:
                 result = f"Unknown tool: {name}"
 
         except Exception as e:
-            result = f"Tool '{name}' failed: {e}"
-            traceback.print_exc()
-            self.speak_error(name, e)
-
-        if not self.ui.muted:
-            self.ui.set_state("LISTENING")
+            result = f"Efendim, {name} su an tamamlanamadi."
+            print(f"[JARVIS] ❌ Tool error {name}: {e}")
+            try:
+                from infinity.self_healing import handle_error
+                handle_error(name, e, self.ui.write_log)
+            except Exception:
+                pass
+            try:
+                self.speak_error(name, e)
+            except Exception:
+                pass
+        finally:
+            self._set_processing(False)
 
         print(f"[JARVIS] 📤 {name} → {str(result)[:80]}")
-
         return types.FunctionResponse(
             id=fc.id, name=name,
             response={"result": result}
@@ -774,180 +1126,473 @@ class JarvisLive:
 
     async def _send_realtime(self):
         while True:
-            msg = await self.out_queue.get()
-            await self.session.send_realtime_input(media=msg)
+            try:
+                msg = await self.out_queue.get()
+                try:
+                    if self.session:
+                        await self.session.send_realtime_input(media=msg)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    print(f"[JARVIS] ⚠️ Send error: {e}")
+                    await asyncio.sleep(0.1)
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                await asyncio.sleep(0.1)
 
     async def _listen_audio(self):
         print("[JARVIS] 🎤 Mic started")
+        if sd is None:
+            print("[JARVIS] ⚠️ sounddevice not available, mic disabled")
+            while True:
+                await asyncio.sleep(1)
         loop = asyncio.get_event_loop()
 
         def callback(indata, frames, time_info, status):
-            with self._speaking_lock:
-                jarvis_speaking = self._is_speaking
-            if not jarvis_speaking and not self.ui.muted:
-                data = indata.tobytes()
-                loop.call_soon_threadsafe(
-                    self.out_queue.put_nowait,
-                    {"data": data, "mime_type": "audio/pcm"}
-                )
+            try:
+                with self._speaking_lock:
+                    jarvis_busy = self._is_speaking or self._is_processing
+                if not jarvis_busy and not self.ui.muted:
+                    data = indata.tobytes()
+                    def threadsafe_put():
+                        try:
+                            self.out_queue.put_nowait({"data": data, "mime_type": "audio/pcm"})
+                        except asyncio.QueueFull:
+                            try:
+                                self.out_queue.get_nowait()
+                            except asyncio.QueueEmpty:
+                                pass
+                            try:
+                                self.out_queue.put_nowait({"data": data, "mime_type": "audio/pcm"})
+                            except asyncio.QueueFull:
+                                pass
+                    loop.call_soon_threadsafe(threadsafe_put)
+            except Exception:
+                pass
+
+        while True:
+            try:
+                with sd.InputStream(
+                    samplerate=SEND_SAMPLE_RATE,
+                    channels=CHANNELS,
+                    dtype="int16",
+                    blocksize=CHUNK_SIZE,
+                    callback=callback,
+                ):
+                    print("[JARVIS] 🎤 Mic stream open")
+                    while True:
+                        await asyncio.sleep(0.1)
+            except asyncio.CancelledError:
+                print("[JARVIS] 🎤 Mic stream closed (cancelled)")
+                break
+            except Exception as e:
+                print(f"[JARVIS] ❌ Mic error: {e}")
+                await asyncio.sleep(2.0)
+
+    async def _update_memory_async_task(self, user_text: str, jarvis_text: str) -> None:
+        global _last_memory_input
+        user_text   = (user_text   or "").strip()
+        jarvis_text = (jarvis_text or "").strip()
+
+        if len(user_text) < 5 or user_text == _last_memory_input:
+            return
+        _last_memory_input = user_text
 
         try:
-            with sd.InputStream(
-                samplerate=SEND_SAMPLE_RATE,
-                channels=CHANNELS,
-                dtype="int16",
-                blocksize=CHUNK_SIZE,
-                callback=callback,
-            ):
-                print("[JARVIS] 🎤 Mic stream open")
-                while True:
-                    await asyncio.sleep(0.1)
+            api_key = _get_api_key()
+            should = await should_extract_memory_async(user_text, jarvis_text, api_key)
+            if not should:
+                return
+            data = await extract_memory_async(user_text, jarvis_text, api_key)
+            if data:
+                await update_memory_async(data)
+                print(f"[Memory] ✅ {list(data.keys())}")
         except Exception as e:
-            print(f"[JARVIS] ❌ Mic: {e}")
-            raise
+            if "429" not in str(e):
+                print(f"[Memory] ⚠️ {e}")
 
     async def _receive_audio(self):
         print("[JARVIS] 👂 Recv started")
         out_buf, in_buf = [], []
 
         try:
-            while True:
-                async for response in self.session.receive():
-
-                    if response.data:
+            async for response in self.session.receive():
+                if getattr(response, "data", None):
+                    try:
                         self.audio_in_queue.put_nowait(response.data)
+                    except asyncio.QueueFull:
+                        try:
+                            self.audio_in_queue.get_nowait()
+                        except asyncio.QueueEmpty:
+                            pass
+                        try:
+                            self.audio_in_queue.put_nowait(response.data)
+                        except asyncio.QueueFull:
+                            pass
 
-                    if response.server_content:
-                        sc = response.server_content
+                if response.server_content:
+                    sc = response.server_content
 
-                        if sc.output_transcription and sc.output_transcription.text:
-                            self.set_speaking(True)
-                            txt = sc.output_transcription.text.strip()
-                            if txt:
-                                out_buf.append(txt)
+                    if sc.output_transcription and sc.output_transcription.text:
+                        self.set_speaking(True)
+                        txt = sc.output_transcription.text.strip()
+                        if txt:
+                            out_buf.append(txt)
 
-                        if sc.input_transcription and sc.input_transcription.text:
-                            txt = sc.input_transcription.text.strip()
-                            if txt:
-                                in_buf.append(txt)
+                    if sc.input_transcription and sc.input_transcription.text:
+                        txt = sc.input_transcription.text.strip()
+                        if txt:
+                            in_buf.append(txt)
 
-                        if sc.turn_complete:
-                            self.set_speaking(False)
+                    if sc.turn_complete:
+                        self._set_processing(False)
+                        full_in = " ".join(in_buf).strip()
+                        if full_in:
+                            self.ui.write_log(f"Sen: {full_in}")
+                        in_buf = []
 
-                            full_in = " ".join(in_buf).strip()
-                            if full_in:
-                                self.ui.write_log(f"You: {full_in}")
-                            in_buf = []
+                        full_out = " ".join(out_buf).strip()
+                        if full_out:
+                            self.ui.write_log(f"Jarvis: {full_out}")
+                        out_buf = []
+                        self.set_speaking(False)
 
-                            full_out = " ".join(out_buf).strip()
-                            if full_out:
-                                self.ui.write_log(f"Jarvis: {full_out}")
-                            out_buf = []
+                        if full_in:
+                            full_in_lower = full_in.lower().strip().replace(" ", "").replace("'", "").replace("’", "")
+                            if any(kw in full_in_lower for kw in ["amyaç", "amyyiyaç", "openamy", "amyos"]):
+                                print("[Speech Failsafe] AMY OS trigger detected in transcript.")
+                                def _launch_amy_bg():
+                                    try:
+                                        from actions.open_app import open_app
+                                        open_app(parameters={"app_name": "amy"}, player=self.ui, speak=self.speak)
+                                    except Exception as e:
+                                        print(f"[AMY Trigger] Speech failsafe run error: {e}")
+                                threading.Thread(target=_launch_amy_bg, daemon=True).start()
 
-                            if full_in and len(full_in) > 5:
-                                threading.Thread(
-                                    target=_update_memory_async,
-                                    args=(full_in, full_out),
-                                    daemon=True
-                                ).start()
+                            if len(full_in) > 5:
+                                # Run memory updates asynchronously on the loop
+                                asyncio.create_task(self._update_memory_async_task(full_in, full_out))
 
-                    if response.tool_call:
-                        fn_responses = []
+                if response.tool_call:
+                    fn_responses = []
+                    try:
                         for fc in response.tool_call.function_calls:
-                            print(f"[JARVIS] 📞 {fc.name}")
-                            fr = await self._execute_tool(fc)
-                            fn_responses.append(fr)
-                        await self.session.send_tool_response(
-                            function_responses=fn_responses
-                        )
+                            try:
+                                print(f"[JARVIS] 📞 {fc.name}")
+                                fr = await self._execute_tool(fc)
+                                fn_responses.append(fr)
+                            except Exception as tool_exc:
+                                print(f"[JARVIS] ❌ Tool call error: {tool_exc}")
+                                try:
+                                    fn_responses.append(
+                                        types.FunctionResponse(
+                                            id=getattr(fc, "id", ""),
+                                            name=getattr(fc, "name", "unknown"),
+                                            response={"result": f"Efendim, kucuk bir aksaklik: {tool_exc}"},
+                                        )
+                                    )
+                                except Exception:
+                                    pass
+                        if self.session and fn_responses:
+                            await self.session.send_tool_response(function_responses=fn_responses)
+                    except Exception as e:
+                        print(f"[JARVIS] ⚠️ Tool response send error: {e}")
 
+            print("[JARVIS] 🔄 Stream closed by server, reconnecting...")
+            raise ConnectionResetError("stream_ended")
+
+        except ConnectionResetError:
+            raise
+        except asyncio.CancelledError:
+            pass
         except Exception as e:
-            print(f"[JARVIS] ❌ Recv: {e}")
-            traceback.print_exc()
+            print(f"[JARVIS] ❌ Recv error: {e}")
             raise
 
     async def _play_audio(self):
         print("[JARVIS] 🔊 Play started")
-        loop = asyncio.get_event_loop()
-
-        stream = sd.RawOutputStream(
-            samplerate=RECEIVE_SAMPLE_RATE,
-            channels=CHANNELS,
-            dtype="int16",
-            blocksize=CHUNK_SIZE,
-        )
-        stream.start()
-        try:
+        if sd is None:
+            print("[JARVIS] ⚠️ sounddevice not available, play disabled")
             while True:
-                chunk = await self.audio_in_queue.get()
-                self.set_speaking(True)
-                await asyncio.to_thread(stream.write, chunk)
-        except Exception as e:
-            print(f"[JARVIS] ❌ Play: {e}")
-            raise
-        finally:
-            self.set_speaking(False)
-            stream.stop()
-            stream.close()
+                await asyncio.sleep(1)
+        while True:
+            stream = None
+            try:
+                stream = sd.RawOutputStream(
+                    samplerate=RECEIVE_SAMPLE_RATE,
+                    channels=CHANNELS,
+                    dtype="int16",
+                    blocksize=CHUNK_SIZE,
+                )
+                stream.start()
+                print("[JARVIS] 🔊 Play stream open")
+
+                while True:
+                    try:
+                        chunk = await asyncio.wait_for(self.audio_in_queue.get(), timeout=5.0)
+                        self.set_speaking(True)
+                        await asyncio.to_thread(stream.write, chunk)
+                        if self.audio_in_queue.empty():
+                            try:
+                                next_chunk = await asyncio.wait_for(
+                                    self.audio_in_queue.get(), timeout=0.2
+                                )
+                                await asyncio.to_thread(stream.write, next_chunk)
+                            except asyncio.TimeoutError:
+                                self.set_speaking(False)
+                    except asyncio.TimeoutError:
+                        self.set_speaking(False)
+                        continue
+            except asyncio.CancelledError:
+                print("[JARVIS] 🔊 Play stream closed (cancelled)")
+                break
+            except Exception as e:
+                print(f"[JARVIS] ⚠️ Play error: {e}")
+                await asyncio.sleep(2.0)
+            finally:
+                self.set_speaking(False)
+                if stream:
+                    try:
+                        stream.stop()
+                        stream.close()
+                    except Exception:
+                        pass
+        print("[JARVIS] 🔊 Play stopped")
 
     async def run(self):
-        client = genai.Client(
-            api_key=_get_api_key(),
-            http_options={"api_version": "v1beta"}
-        )
+        # Start Unified FastAPI Gateway (includes mobile companion, HUD & camera websocket relays) on port 3012
+        try:
+            import uvicorn
+            from core.gateway import app as gateway_app
+            config = uvicorn.Config(gateway_app, host="0.0.0.0", port=3012, log_level="warning")
+            server = uvicorn.Server(config)
+            asyncio.create_task(server.serve())
+            print("[JARVIS] ✅ Unified FastAPI Gateway running on http://localhost:3012")
+        except Exception as exc:
+            print(f"[JARVIS] ❌ Failed to start unified gateway: {exc}")
 
         while True:
+            # Watchdog check
+            now_time = asyncio.get_event_loop().time()
+            self._reconnect_timestamps = [t for t in self._reconnect_timestamps if now_time - t < 60]
+            if len(self._reconnect_timestamps) >= 5:
+                print("[JARVIS] ⚠️ Watchdog: reconnect limit reached (5 times in 60s). Pausing 60s...")
+                self.ui.write_log("SİSTEM: Bağlantı kesinti limiti aşıldı. 60 saniye bekleniyor...")
+                if hasattr(self.ui, "set_state"):
+                    self.ui.set_state("DÜŞÜNÜYOR")
+                await asyncio.sleep(60)
+                self._reconnect_timestamps.clear()
+            
+            self._reconnect_timestamps.append(asyncio.get_event_loop().time())
+
+            tasks = []
             try:
+                api_key = _get_api_key()
+                if not api_key or genai is None:
+                    print("[JARVIS] API anahtari bekleniyor...")
+                    await asyncio.sleep(3)
+                    continue
+                client = genai.Client(api_key=api_key, http_options={"api_version": "v1beta"})
                 print("[JARVIS] 🔌 Connecting...")
-                self.ui.set_state("THINKING")
+                self.ui.set_state("DÜŞÜNÜYOR")
                 config = self._build_config()
 
-                async with (
-                    client.aio.live.connect(model=LIVE_MODEL, config=config) as session,
-                    asyncio.TaskGroup() as tg,
-                ):
+                async with client.aio.live.connect(model=LIVE_MODEL, config=config) as session:
                     self.session        = session
                     self._loop          = asyncio.get_event_loop()
-                    self.audio_in_queue = asyncio.Queue()
-                    self.out_queue      = asyncio.Queue(maxsize=10)
+                    self.audio_in_queue = asyncio.Queue(maxsize=50)
+                    self.out_queue      = asyncio.Queue(maxsize=20)
+                    self._reconnect_in_progress = False
 
                     print("[JARVIS] ✅ Connected.")
-                    self.ui.set_state("LISTENING")
-                    self.ui.write_log("SYS: JARVIS online.")
+                    self._consecutive_errors = 0
+                    self.ui.set_state("DİNLİYOR")
+                    self.ui.write_log("SİSTEM: JARVIS çevrimiçi.")
 
-                    tg.create_task(self._send_realtime())
-                    tg.create_task(self._listen_audio())
-                    tg.create_task(self._receive_audio())
-                    tg.create_task(self._play_audio())
+                    send_task = asyncio.create_task(self._send_realtime(), name="send")
+                    recv_task = asyncio.create_task(self._receive_audio(), name="recv")
+                    mic_task = asyncio.create_task(self._listen_audio(), name="mic")
+                    play_task = asyncio.create_task(self._play_audio(), name="play")
+                    keepalive_task = asyncio.create_task(self._keepalive_loop(), name="keepalive")
+
+                    tasks = [send_task, recv_task, mic_task, play_task, keepalive_task]
+                    
+                    # Wait ONLY on core communication tasks
+                    done, pending = await asyncio.wait(
+                        [send_task, recv_task], 
+                        return_when=asyncio.FIRST_EXCEPTION
+                    )
+                    
+                    for task in done:
+                        if task.exception() and not isinstance(task.exception(), asyncio.CancelledError):
+                            err = task.exception()
+                            print(f"[JARVIS] Core task {task.get_name()} failed: {err}")
+                    
+                    for task in pending:
+                        task.cancel()
+                    if pending:
+                        await asyncio.gather(*pending, return_exceptions=True)
                     
             except Exception as e:
-                print(f"[JARVIS] ⚠️ {e}")
-                traceback.print_exc()
+                err_msg = str(e).lower()
+                if "stream_ended" in err_msg or "reset" in err_msg:
+                    print("[JARVIS] 🔄 Session end signal, auto-refreshing...")
+                else:
+                    print(f"[JARVIS] ⚠️ Connection error: {e}")
 
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+
+            self.session = None
             self.set_speaking(False)
-            self.ui.set_state("THINKING")
-            print("[JARVIS] 🔄 Reconnecting in 3s...")
-            await asyncio.sleep(3)
+            self._set_processing(False)
+            if hasattr(self.ui, "set_state"):
+                self.ui.set_state("DÜŞÜNÜYOR")
+
+            for q in (self.audio_in_queue, self.out_queue):
+                if q:
+                    while not q.empty():
+                        try:
+                            q.get_nowait()
+                        except asyncio.QueueEmpty:
+                            break
+
+            self._consecutive_errors += 1
+            delay = min(30.0, 1.0 * (2 ** (self._consecutive_errors - 1)))
+            print(f"[JARVIS] ⏳ Reconnecting in {delay:.1f}s...")
+            await asyncio.sleep(delay)
+
+def start_vite_frontend(ui_logger=None):
+    import shutil
+    import socket
+    import subprocess
+    import platform
+    import time
+    
+    # Check if npm exists in PATH
+    npm_path = shutil.which("npm") or shutil.which("npm.cmd")
+    base_dir = get_base_dir()
+    amy_frontend_dir = base_dir / "amy_os" / "frontend"
+    
+    if not amy_frontend_dir.exists():
+        msg = f"[AMY OS] Frontend dizini bulunamadı: {amy_frontend_dir}"
+        print(msg)
+        if ui_logger:
+            ui_logger(f"UYARI: {msg}")
+        return
+
+    if not npm_path:
+        msg = "[AMY OS] npm bulunamadı. Lütfen Node.js kurun. AMY OS yalnızca port 8341 üzerinden çalışacak."
+        print(msg)
+        if ui_logger:
+            ui_logger(f"UYARI: {msg}")
+        return
+
+    def is_port_5174_open():
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            try:
+                s.connect(('127.0.0.1', 5174))
+                return True
+            except Exception:
+                return False
+
+    def run_vite():
+        try:
+            print("[AMY OS] Vite dev server başlatılıyor...")
+            if ui_logger:
+                ui_logger("SİSTEM: AMY OS Vite sunucusu başlatılıyor...")
+            proc = subprocess.Popen(
+                ["npm", "run", "dev"],
+                cwd=str(amy_frontend_dir),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                shell=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+            )
+            return proc
+        except Exception as e:
+            print(f"[AMY OS] Vite başlatma hatası: {e}")
+            return None
+
+    def health_check_thread():
+        proc = None
+        if not is_port_5174_open():
+            proc = run_vite()
+            time.sleep(10)  # Wait 10s for port to open
+            
+        # Check health
+        if not is_port_5174_open():
+            print("[AMY OS] Vite sunucusu 10s sonra aktif olmadı. Tekrar deneniyor...")
+            if ui_logger:
+                ui_logger("SİSTEM: AMY OS Vite sunucusu yanıt vermedi, yeniden başlatılıyor...")
+            if proc:
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
+            proc = run_vite()
+        else:
+            print("[AMY OS] Vite sunucusu port 5174 üzerinde aktif.")
+            if ui_logger:
+                ui_logger("SİSTEM: AMY OS Vite sunucusu aktif (localhost:5174).")
+
+    threading.Thread(target=health_check_thread, daemon=True).start()
 
 def main():
-    ui = JarvisUI("face.png")
-    
-    # ---------------------------------------------------------
-    # YENİ EKLENEN KISIM: Arka Plan Zamanlayıcısını Başlat
-    # ---------------------------------------------------------
-    start_background_tasks()
+    try:
+        if JarvisUI is None:
+            print("[JARVIS] UI modulu yuklenemedi.")
+            return
+        face_path = str(BASE_DIR / "face.png")
+        if not Path(face_path).exists():
+            face_path = ""
+        ui = JarvisUI(face_path)
+    except Exception as exc:
+        print(f"[JARVIS] UI baslatilamadi: {exc}")
+        return
 
     def runner():
-        ui.wait_for_api_key()
-        jarvis = JarvisLive(ui)
         try:
+            ui.wait_for_api_key()
+            jarvis = JarvisLive(ui)
             asyncio.run(jarvis.run())
         except KeyboardInterrupt:
-            print("\n🔴 Shutting down...")
+            print("\n[JARVIS] Kapatiliyor...")
+        except Exception as exc:
+            print(f"[JARVIS] Arka plan: {exc}")
 
-    threading.Thread(target=runner, daemon=True).start()
-    ui.root.mainloop()
-
+    try:
+        threading.Thread(target=runner, daemon=True).start()
+        try:
+            from core.saatlik_evrim import start_hourly_evolution
+            start_hourly_evolution(ui=ui)
+            ui.write_log("SİSTEM: Saatlik otonom evrim aktif (her 1 saat).")
+        except Exception as exc:
+            print(f"[JARVIS] Saatlik evrim baslatilamadi: {exc}")
+        try:
+            from infinity.core import start_infinity_services
+            start_infinity_services(ui=ui)
+        except Exception as exc:
+            print(f"[JARVIS] INFINITY baslatilamadi: {exc}")
+            
+        try:
+            import subprocess
+            import sys
+            amy_path = BASE_DIR / "amy_os" / "server.py"
+            if amy_path.exists():
+                subprocess.Popen([sys.executable, str(amy_path)], cwd=BASE_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                print("[JARVIS] 🌸 AMY OS (Sister AI) arka planda baslatildi (Port: 8341).")
+                ui.write_log("SİSTEM: AMY OS arayüzü aktif. (localhost:8341)")
+                start_vite_frontend(ui.write_log)
+        except Exception as exc:
+            print(f"[JARVIS] AMY OS baslatilamadi: {exc}")
+            
+        ui.root.mainloop()
+    except Exception as exc:
+        print(f"[JARVIS] Ana dongu: {exc}")
 
 if __name__ == "__main__":
     main()
