@@ -6,6 +6,7 @@ import sys
 import traceback
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+import logging
 
 _process_executor = None
 
@@ -171,6 +172,7 @@ class JarvisLive:
             result = await app(scope)  # type: ignore[func-returns-value]
             await result
         except Exception as exc:
+            logger = logging.getLogger(__name__)
             logger.error(
                 "Exception in ASGI application\n%s",
                 "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
