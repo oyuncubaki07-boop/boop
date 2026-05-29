@@ -165,4 +165,16 @@ class JarvisLive:
             self.ui.bind_jarvis(self)
         self._refresh_evolution_ui()
 
+    async def handle_request(self, scope: dict) -> None:
+        try:
+            app = self.config.loaded_app
+            result = await app(scope)  # type: ignore[func-returns-value]
+            await result
+        except Exception as exc:
+            logger.error(
+                "Exception in ASGI application\n%s",
+                "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
+            )
+            self.transport.close()
+
     # ... (rest of the code omitted for brevity)
