@@ -178,72 +178,100 @@ def open_app(
 
     system   = platform.system()
     
-    # Intercept AMY OS launch requests
-    app_name_lower = app_name.lower().replace(" ", "").replace("'", "").replace("’", "")
-    if any(keyword in app_name_lower for keyword in ["amy", "amyos", "amyiac", "openamy"]):
-        import webbrowser
-        import os
-        import subprocess
-        import sys
-        import socket
-        from pathlib import Path
-        
-        # 1. Start FastAPI server (if not already running on port 8341)
-        is_server_running = _is_running("server.py") or _is_running("uvicorn")
-        if not is_server_running:
-            print("[open_app] 🌸 AMY FastAPI server is not running, launching silently...")
-            base_dir = Path(__file__).resolve().parent.parent
-            amy_path = base_dir / "amy_os" / "server.py"
-            if amy_path.exists():
-                subprocess.Popen(
-                    [sys.executable, str(amy_path)],
-                    cwd=str(base_dir),
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
-                )
-                time.sleep(1.5) # Wait for startup
-        
-        # 2. Start Vite dev server (if not already running)
+INTENT_MAP = {
+    "amy": "open_amy_ui",
+    "amy aç": "open_amy_ui", 
+    "amy os": "open_amy_ui",
+    "kod rehberi": "open_kod_rehberi",
+    "ekranı analiz et": "screen_process",
+    "ekran analiz": "screen_process",
+}
+
+def open_amy_ui(speak=None) -> str:
+    import webbrowser
+    import os
+    import subprocess
+    import sys
+    import socket
+    import platform
+    from pathlib import Path
+    
+    # 1. Start FastAPI server (if not already running on port 8341)
+    is_server_running = _is_running("server.py") or _is_running("uvicorn")
+    if not is_server_running:
+        print("[open_app] 🌸 AMY FastAPI server is not running, launching silently...")
         base_dir = Path(__file__).resolve().parent.parent
-        frontend_dir = base_dir / "amy_os" / "frontend"
-        if frontend_dir.exists():
-            print("[open_app] 🌸 Launching AMY Vite frontend dev server silently...")
+        amy_path = base_dir / "amy_os" / "server.py"
+        if amy_path.exists():
             subprocess.Popen(
-                ["npm", "run", "dev"],
-                cwd=str(frontend_dir),
+                [sys.executable, str(amy_path)],
+                cwd=str(base_dir),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                shell=True,
                 creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
             )
-            time.sleep(1.0)
-        
-        # 3. Check dynamically which port is open
-        def is_port_open(port):
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(0.25)
-                try:
-                    s.connect(('127.0.0.1', port))
-                    return True
-                except Exception:
-                    return False
-        
-        target_url = 'http://localhost:5174'
-        if not is_port_open(5174):
-            print("[open_app] 🌸 Vite port 5174 is closed (NPM missing/inactive). Routing to FastAPI port 8341...")
-            target_url = 'http://localhost:8341'
+            time.sleep(1.5) # Wait for startup
             
-        webbrowser.open(target_url)
+    # 2. Check dynamically which port is open
+    def is_port_open(port):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.25)
+            try:
+                s.connect(('127.0.0.1', port))
+                return True
+            except Exception:
+                return False
+
+    target_url = 'http://localhost:5174'
+    if not is_port_open(5174):
+        print("[open_app] 🌸 Vite port 5174 is closed (NPM missing/inactive). Routing to FastAPI port 8341...")
+        target_url = 'http://localhost:8341'
         
-        msg = "AMY OS sistemleri ekrana yansıtılıyor, efendim."
+    webbrowser.open(target_url)
+    
+    msg = "AMY OS sistemleri ekrana yansıtılıyor, efendim."
+    if speak:
+        try:
+            speak(msg)
+        except Exception as e:
+            print(f"[open_app] ⚠️ Speak call failed: {e}")
+            
+    return msg
+
+def handle_intent(action: str, query: str, speak=None, ui=None) -> str:
+    if action == "open_amy_ui":
+        return open_amy_ui(speak=speak)
+    elif action == "open_kod_rehberi":
+        from kod_rehberi_window import open_kod_rehberi_safe
+        msg = open_kod_rehberi_safe()
         if speak:
             try:
                 speak(msg)
-            except Exception as e:
-                print(f"[open_app] ⚠️ Speak call failed: {e}")
-                
+            except Exception:
+                pass
         return msg
+    elif action == "screen_process":
+        import threading
+        from actions.screen_processor import screen_process
+        threading.Thread(
+            target=screen_process,
+            kwargs={"parameters": {"angle": "screen", "text": query},
+                    "response": None, "player": ui, "session_memory": None},
+            daemon=True
+        ).start()
+        msg = "Ekranı analiz ediyorum efendim. Lütfen bekleyin."
+        if speak:
+            try:
+                speak(msg)
+            except Exception:
+                pass
+        return msg
+    return f"Bilinmeyen eylem: {action}"
+
+    # Intercept AMY OS launch requests
+    app_name_lower = app_name.lower().replace(" ", "").replace("'", "").replace("’", "")
+    if any(keyword in app_name_lower for keyword in ["amy", "amyos", "amyiac", "openamy"]):
+        return open_amy_ui(speak=speak)
 
     launcher = _OS_LAUNCHERS.get(system)
 
