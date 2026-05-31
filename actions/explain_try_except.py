@@ -25,5 +25,5 @@ def run_action(parameters):
       (örneğin, kaynakları serbest bırakmak için).
 
     **Örnek (Kodu çalıştırdığınızda aşağıdaki gibi bir etkileşim göreceksiniz):**
-    \"\"\"
+    """
     return skill_description
