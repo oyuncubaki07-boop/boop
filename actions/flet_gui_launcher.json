@@ -1,0 +1,8 @@
+{
+    "name": "flet_gui_launcher",
+    "description": "Flet kütüphanesini kullanarak modern, şık ve fütüristik J.A.R.V.I.S. masaüstü kontrol arayüzünü (GUI) başlatır.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}

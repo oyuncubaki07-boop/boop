@@ -1,0 +1,14 @@
+{
+    "name": "leon_control",
+    "description": "Leon AI asistanına sesli/yazılı komut veya soru göndermek ve yanıt almak için kullanılır.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "command": {
+                "type": "STRING",
+                "description": "Leon AI asistanına iletilecek olan komut veya soru metni."
+            }
+        },
+        "required": ["command"]
+    }
+}

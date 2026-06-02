@@ -1,0 +1,26 @@
+{
+    "name": "long_term_memory",
+    "description": "ChromaDB yerel veritabanı üzerinden uzun süreli hafızaya bilgi kaydeder (store) veya geçmiş bilgileri hatırlar (recall).",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "operation": {
+                "type": "STRING",
+                "description": "Yapılacak hafıza işlemi. 'store' (kaydetme) veya 'recall' (arama/hatırlama)."
+            },
+            "text": {
+                "type": "STRING",
+                "description": "Kaydedilmek istenen metin veya bilgi içeriği (store işlemi için)."
+            },
+            "query": {
+                "type": "STRING",
+                "description": "Aramak/hatırlamak istediğiniz konu veya soru cümlesi (recall işlemi için)."
+            },
+            "doc_id": {
+                "type": "STRING",
+                "description": "Hafıza kaydı için isteğe bağlı benzersiz kimlik (belirtilmezse otomatik atanır)."
+            }
+        },
+        "required": ["operation"]
+    }
+}

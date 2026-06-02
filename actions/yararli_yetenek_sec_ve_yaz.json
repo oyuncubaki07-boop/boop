@@ -1,0 +1,8 @@
+{
+    "name": "yararli_yetenek_sec_ve_yaz",
+    "description": "Konsey yetenegi: Yararli bir yetenek sec ve yaz.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}

@@ -1,0 +1,14 @@
+{
+    "name": "autogpt_research",
+    "description": "AutoGPT otonom araştırma ajanını başlatarak internet üzerinde çok sekmeli derin araştırmalar yapar ve plan hazırlar.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "task": {
+                "type": "STRING",
+                "description": "AutoGPT ajanına verilecek otonom araştırma görevi veya hedef cümlesi."
+            }
+        },
+        "required": ["task"]
+    }
+}

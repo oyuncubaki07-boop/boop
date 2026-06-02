@@ -1,0 +1,13 @@
+{
+    "name": "biometric_scan",
+    "description": "Biyometrik yüz tanıma teknolojisi ile odaya giren veya kameraya bakan kişiyi teşhis eder ve J.A.R.V.I.S. kişiselleştirilmiş açılışını tetikler.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "image_path": {
+                "type": "STRING",
+                "description": "Taranacak yüzün resim dosyası yolu (boş bırakılırsa canlı kamera görüntüsü yakalanır)."
+            }
+        }
+    }
+}

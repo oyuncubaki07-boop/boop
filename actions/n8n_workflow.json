@@ -1,0 +1,18 @@
+{
+    "name": "n8n_workflow",
+    "description": "n8n.io otomasyon entegrasyonu üzerinden Gmail, GitHub, Shopify ve diğer harici web kancalarını tetikler.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "event_name": {
+                "type": "STRING",
+                "description": "n8n üzerinde tetiklenecek webhook olay adı (örn: siparis_bildirimi, github_push)."
+            },
+            "payload": {
+                "type": "OBJECT",
+                "description": "Webhook ile birlikte gönderilecek ek JSON veri paketi."
+            }
+        },
+        "required": ["event_name"]
+    }
+}

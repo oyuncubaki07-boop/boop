@@ -1,0 +1,26 @@
+{
+    "name": "smart_home_control",
+    "description": "Home Assistant üzerinden lambaları, prizleri, klimaları ve diğer tüm akıllı ev bileşenlerini açar, kapatır veya yönetir.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "domain": {
+                "type": "STRING",
+                "description": "İşlem yapılacak cihaz türü (örn: light, switch, media_player, climate)."
+            },
+            "service": {
+                "type": "STRING",
+                "description": "Gönderilecek komut servisi (örn: turn_on, turn_off, set_temperature, toggle)."
+            },
+            "entity_id": {
+                "type": "STRING",
+                "description": "Hedef cihazın sistem kodu (örn: light.salon_lambasi, climate.yatak_odasi)."
+            },
+            "service_data": {
+                "type": "OBJECT",
+                "description": "Servis için ek detay parametreleri (örn: parlaklık yüzdesi, hedef sıcaklık)."
+            }
+        },
+        "required": ["domain", "service"]
+    }
+}

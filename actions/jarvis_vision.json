@@ -1,0 +1,13 @@
+{
+    "name": "jarvis_vision",
+    "description": "YOLOv8 kullanarak kamera veya ekran görüntüsü üzerinden nesne, kişi ve donanım tespiti yapar.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "image_path": {
+                "type": "STRING",
+                "description": "Analiz edilecek resmin tam yolu (belirtilmezse güncel ekran görüntüsü incelenir)."
+            }
+        }
+    }
+}

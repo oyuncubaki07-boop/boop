@@ -1,0 +1,14 @@
+{
+    "name": "local_inference",
+    "description": "Yerel donanım ivmelendirmeli llama.cpp nöral ağı üzerinden ışık hızında LLM çıkarımı gerçekleştirir.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "prompt": {
+                "type": "STRING",
+                "description": "Yerel LLM modeline sorulacak soru veya prompt metni."
+            }
+        },
+        "required": ["prompt"]
+    }
+}
