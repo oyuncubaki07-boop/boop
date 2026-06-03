@@ -1,0 +1,8 @@
+{
+    "name": "yeni_yeteneklerin_entegrasyo",
+    "description": "Konsey yetenegi: yeni yeteneklerin entegrasyonu ve strateji geliştirme",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}
