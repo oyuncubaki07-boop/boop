@@ -4,10 +4,11 @@ from typing import Callable
 from core.voice.tts_manager import generate_speech_elevenlabs_sync
 
 def start_f12_chat(ui, default_speak_func: Callable):
-    import google.generativeai as genai
-    from core.config_loader import get_api_key
+    from google import genai
+    from core.config_loader import get_key
     import tempfile
     import os
+    import random
     
     # Try to import pygame for audio playback
     try:
@@ -46,8 +47,19 @@ def start_f12_chat(ui, default_speak_func: Callable):
             print(f"[F12 Chat Audio] Error playing audio: {e}")
 
     try:
-        genai.configure(api_key=get_api_key())
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        # Yeni nesil genai kütüphanesi ve Yük Dağıtımı (Load Balancing)
+        key_list = [
+            get_key("gemini_api_key", ""),
+            get_key("gemini_api_key_2", ""),
+            get_key("gemini_api_key_3", "")
+        ]
+        # Sadece içi dolu olan geçerli anahtarları filtrele
+        valid_keys = [k for k in key_list if k.strip()]
+        
+        # Geçerli anahtarlar arasından rastgele birini seç
+        api_key = random.choice(valid_keys) if valid_keys else os.getenv("GEMINI_API_KEY", "")
+        
+        client = genai.Client(api_key=api_key)
         
         prompt = """
         Sen 4 farklı yapay zeka asistanını canlandıracaksın: Nova, Friday, Jarvis ve Amy.
@@ -60,7 +72,10 @@ def start_f12_chat(ui, default_speak_func: Callable):
         Amy: (bir şeyler söyler)
         Nova: (bir şeyler söyler)
         """
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
         text = response.text.strip()
         
         for line in text.split("\n"):
