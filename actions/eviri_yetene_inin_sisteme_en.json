@@ -1,0 +1,8 @@
+{
+    "name": "eviri_yetene_inin_sisteme_en",
+    "description": "Konsey yetenegi: Çeviri yeteneğinin sisteme entegrasyonu",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}

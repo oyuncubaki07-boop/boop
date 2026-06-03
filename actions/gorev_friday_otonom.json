@@ -1,0 +1,8 @@
+{
+    "name": "gorev_friday_otonom",
+    "description": "Konsey yetenegi: FRIDAY protokolü entegrasyonu ve otonom gelişim",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}

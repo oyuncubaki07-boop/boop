@@ -1,0 +1,8 @@
+{
+    "name": "yeni_yetenek_ve_zelliklerin_",
+    "description": "Konsey yetenegi: Yeni yetenek ve özelliklerin otonom olarak araştırılması ve eklenmesi",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}
