@@ -168,6 +168,9 @@ INTENT_MAP = {
     "amy aç": "open_amy_ui", 
     "amy os": "open_amy_ui",
     "kod rehberi": "open_kod_rehberi",
+    "kod rehberi aç": "open_kod_rehberi",
+    "kod rehberini aç": "open_kod_rehberi",
+    "kod rehberi penceresini aç": "open_kod_rehberi",
     "ekranı analiz et": "screen_process",
     "ekran analiz": "screen_process",
 }
