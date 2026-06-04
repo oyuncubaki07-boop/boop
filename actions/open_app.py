@@ -163,21 +163,6 @@ _OS_LAUNCHERS = {
     "Linux":   _launch_linux,
 }
 
-
-def open_app(
-    parameters=None,
-    response=None,
-    player=None,
-    session_memory=None,
-    speak=None,
-) -> str:
-    app_name = (parameters or {}).get("app_name", "").strip()
-
-    if not app_name:
-        return "Please specify which application to open, sir."
-
-    system   = platform.system()
-    
 INTENT_MAP = {
     "amy": "open_amy_ui",
     "amy aç": "open_amy_ui", 
@@ -268,6 +253,20 @@ def handle_intent(action: str, query: str, speak=None, ui=None) -> str:
         return msg
     return f"Bilinmeyen eylem: {action}"
 
+def open_app(
+    parameters=None,
+    response=None,
+    player=None,
+    session_memory=None,
+    speak=None,
+) -> str:
+    app_name = (parameters or {}).get("app_name", "").strip()
+
+    if not app_name:
+        return "Please specify which application to open, sir."
+
+    system   = platform.system()
+
     # Intercept AMY OS launch requests
     app_name_lower = app_name.lower().replace(" ", "").replace("'", "").replace("’", "")
     if any(keyword in app_name_lower for keyword in ["amy", "amyos", "amyiac", "openamy"]):
@@ -301,5 +300,4 @@ def handle_intent(action: str, query: str, speak=None, ui=None) -> str:
         )
 
     except Exception as e:
-        print(f"[open_app] ❌ {e}")
         return f"Failed to open {app_name}, sir: {e}"

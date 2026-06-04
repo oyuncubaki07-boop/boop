@@ -1,0 +1,8 @@
+{
+    "name": "kendine_yetenek_ekle",
+    "description": "Konsey yetenegi: Kendine yetenek ekle",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}

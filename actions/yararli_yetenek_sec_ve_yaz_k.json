@@ -1,0 +1,8 @@
+{
+    "name": "yararli_yetenek_sec_ve_yaz_k",
+    "description": "Konsey yetenegi: Yararli Yetenek Sec Ve Yaz kullan",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}

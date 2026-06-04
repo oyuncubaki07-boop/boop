@@ -1,156 +1,119 @@
-def run_action(parameters: dict) -> dict:
+def run_action(parameters):
     """
-    GOREV: Yeni yeteneklerin entegrasyonu ve strateji geliştirme.
+    Yeni yeteneklerin bir organizasyona entegrasyon sürecini yönetir.
+    Bu fonksiyon, yetenek bilgilerini alır ve entegrasyon adımlarını simüle eder
+    veya gerçek sistemlerdeki ilgili operasyonları tetikler.
 
-    Bu eylem, belirtilen yeni yetenekleri entegre eder ve/veya strateji geliştirme
-    sürecini başlatır veya ilerletir.
+    Args:
+        parameters (dict): Yeni yeteneğe ait bilgileri içeren bir sözlük.
+                           Beklenen anahtarlar:
+                           - 'talent_name' (str): Yeteneğin adı.
+                           - 'talent_id' (str): Yeteneğin benzersiz kimliği.
+                           - 'skills' (list, isteğe bağlı): Yeteneğin sahip olduğu beceriler listesi.
+                           - 'preferred_team_type' (str, isteğe bağlı): Yeteneğin tercih ettiği takım türü (örn: 'Yazılım', 'Pazarlama').
+                           - 'start_date' (str, isteğe bağlı): Yeteneğin başlangıç tarihi (YYYY-MM-DD formatında).
+                           - 'manager_id' (str, isteğe bağlı): Atanacak yöneticinin kimliği.
+                           - 'onboarding_checklist' (list, isteğe bağlı): Özel ek onboarding görevleri.
 
-    Parametreler:
-    - new_hires (list, optional): Entegre edilecek yeni yeteneklerin listesi.
-                                  Her eleman bir dict olmalı:
-                                  {'name': str, 'role': str, 'department': str, 'manager_id': str}
-    - strategy_focus_area (str, optional): Geliştirilecek stratejinin odak alanı (örn: 'Pazar Genişlemesi',
-                                           'Ürün İnovasyonu', 'Operasyonel Verimlilik').
-    - strategic_objectives (list, optional): Strateji geliştirme için başlangıç hedefleri.
-    - strategy_stakeholders (list, optional): Strateji geliştirme sürecine dahil olacak paydaşlar.
-    - integration_plan_id (str, optional): Kullanılacak entegrasyon planının ID'si.
-    - simulate_success (bool, optional): İşlemlerin başarılı olduğunu varsay. Varsayılan: True.
-
-    Dönüş:
-    - dict: İşlemlerin sonuçlarını içeren bir sözlük.
-            Örnek:
-            {
-                "status": "success" | "failure" | "partial_success",
-                "message": "Açıklayıcı mesaj",
-                "talent_integration_results": [
-                    {"name": "Ayşe Yılmaz", "status": "entegre edildi", "details": "İK ve BT süreçleri tamamlandı."},
-                    ...
-                ],
-                "strategy_development_results": {
-                    "focus_area": "Pazar Genişlemesi",
-                    "status": "başlatıldı",
-                    "next_steps": ["Pazar araştırması yap", "Hedef pazarları belirle"],
-                    "estimated_completion": "2024-Q4"
-                },
-                "talent_integration_overall_status": "Completed" | "No new hires to integrate." | "Partial Failure",
-                "strategy_development_overall_status": "Initiated" | "No specific strategy area for development." | "Failure to Initiate"
-            }
+    Returns:
+        dict: Entegrasyon sürecinin durumu, mesajı ve detaylarını içeren bir sözlük.
+              Örnek:
+              {
+                  "status": "success",
+                  "message": "Entegrasyon süreci başarıyla tamamlandı.",
+                  "talent_id": "TY001",
+                  "talent_name": "Ayşe Yılmaz",
+                  "details": [
+                      {"step": "Profil Oluşturma", "status": "completed"},
+                      {"step": "Onboarding Görev Ataması", "tasks": [...], "status": "completed"},
+                      ...
+                  ],
+                  "final_recommendation": "Yazılım Geliştirme Takımı",
+                  "assigned_manager": "MGR101",
+                  "assigned_mentor": "Mentor A"
+              }
     """
-    results = {
-        "status": "success",
-        "message": "İşlem başarıyla başlatıldı.",
-        "talent_integration_results": [],
-        "strategy_development_results": {},
-        "talent_integration_overall_status": "No action taken",
-        "strategy_development_overall_status": "No action taken"
-    }
+    talent_name = parameters.get('talent_name')
+    talent_id = parameters.get('talent_id')
+    skills = parameters.get('skills', [])
+    preferred_team_type = parameters.get('preferred_team_type', 'genel')
+    start_date = parameters.get('start_date', 'Belirtilmedi')
+    manager_id = parameters.get('manager_id', 'Atanmadı')
+    onboarding_checklist = parameters.get('onboarding_checklist', [])
 
-    simulate_success = parameters.get("simulate_success", True)
-    
-    # 1. Yeni Yeteneklerin Entegrasyonu
-    new_hires = parameters.get("new_hires")
-    if new_hires and isinstance(new_hires, list):
-        if not new_hires:
-            results["talent_integration_overall_status"] = "No new hires specified."
-        else:
-            integration_plan_id = parameters.get("integration_plan_id", "standard_onboarding_v1")
-            print(f"Yeni yetenek entegrasyonu başlatılıyor (Plan ID: {integration_plan_id})...")
-            
-            all_integrations_successful = True
-            for hire in new_hires:
-                if not isinstance(hire, dict):
-                    print(f"  - Geçersiz yeni yetenek formatı atlandı: {hire}")
-                    results["talent_integration_results"].append({
-                        "name": "Bilinmeyen Yetenek",
-                        "status": "geçersiz format",
-                        "details": "Yeni yetenek bilgisi sözlük formatında değil."
-                    })
-                    all_integrations_successful = False
-                    continue
-
-                hire_name = hire.get("name", "Bilinmeyen Yetenek")
-                hire_role = hire.get("role", "Bilinmeyen Rol")
-                hire_dept = hire.get("department", "Bilinmeyen Departman")
-                manager_id = hire.get("manager_id", "N/A")
-
-                if simulate_success:
-                    integration_status = "entegre edildi"
-                    details_message = (
-                        f"İK ve BT süreçleri tamamlandı. Rol: {hire_role}, Departman: {hire_dept}, Yönetici: {manager_id}"
-                    )
-                else:
-                    integration_status = "entegrasyon başarısız"
-                    details_message = f"Entegrasyon sırasında bir sorun oluştu. Detaylar için İK ile iletişime geçin. (Yetenek: {hire_name})"
-                    all_integrations_successful = False
-                
-                results["talent_integration_results"].append({
-                    "name": hire_name,
-                    "status": integration_status,
-                    "details": details_message
-                })
-                print(f"  - {hire_name} ({hire_role}) {integration_status}.")
-            
-            results["talent_integration_overall_status"] = "Completed" if all_integrations_successful else "Partial Failure"
-    else:
-        results["talent_integration_overall_status"] = "No new hires to integrate or invalid format."
-
-    # 2. Strateji Geliştirme
-    strategy_focus_area = parameters.get("strategy_focus_area")
-    if strategy_focus_area and isinstance(strategy_focus_area, str):
-        strategic_objectives = parameters.get("strategic_objectives", ["Büyüme", "Verimlilik", "Müşteri Memnuniyeti"])
-        strategy_stakeholders = parameters.get("strategy_stakeholders", ["Yönetim Kurulu", "Üst Düzey Yöneticiler"])
-
-        print(f"\nStrateji geliştirme başlatılıyor: '{strategy_focus_area}'")
-        print(f"  Başlangıç Hedefleri: {', '.join(strategic_objectives)}")
-        print(f"  Katılımcılar: {', '.join(strategy_stakeholders)}")
-
-        if simulate_success:
-            strategy_status = "başlatıldı ve ilk taslak oluşturuldu"
-            next_steps = [
-                "Pazar analizi ve rekabet araştırması yap",
-                "İç yetenek ve kaynak değerlendirmesi yap",
-                "SWOT analizi gerçekleştir",
-                "Hedef ve KPI'ları tanımla",
-                "Uygulama planı oluştur"
-            ]
-            estimated_completion = "2024-Q4" # Örnek tahmin
-            results["strategy_development_overall_status"] = "Initiated"
-        else:
-            strategy_status = "başlatılamadı veya engellendi"
-            next_steps = ["Sorunları gider", "Yeniden planla"]
-            estimated_completion = "Belirsiz"
-            results["strategy_development_overall_status"] = "Failure to Initiate"
-
-        results["strategy_development_results"] = {
-            "focus_area": strategy_focus_area,
-            "status": strategy_status,
-            "initial_objectives": strategic_objectives,
-            "stakeholders": strategy_stakeholders,
-            "next_steps": next_steps,
-            "estimated_completion": estimated_completion
+    if not talent_name or not talent_id:
+        return {
+            "status": "error",
+            "message": "Parametrelerde 'talent_name' veya 'talent_id' eksik."
         }
-    else:
-        results["strategy_development_overall_status"] = "No specific strategy area for development or invalid format."
 
-    # Genel durum kontrolü
-    performed_any_action = (
-        results["talent_integration_overall_status"] != "No action taken" and
-        results["talent_integration_overall_status"] != "No new hires to integrate or invalid format."
-    ) or (
-        results["strategy_development_overall_status"] != "No action taken" and
-        results["strategy_development_overall_status"] != "No specific strategy area for development or invalid format."
-    )
+    integration_steps = []
+    integration_status = "success"
+    integration_message = f"{talent_name} (ID: {talent_id}) için entegrasyon süreci başlatıldı."
 
-    if not performed_any_action:
-        results["status"] = "failure"
-        results["message"] = "Hiçbir entegrasyon veya strateji geliştirme görevi belirtilmedi veya işlenmedi."
-    elif results["talent_integration_overall_status"] == "Partial Failure" or \
-         results["strategy_development_overall_status"] == "Failure to Initiate":
-        results["status"] = "partial_success"
-        results["message"] = "Bazı görevler başarıyla tamamlandı, bazıları başarısız oldu veya atlandı."
-    else:
-        results["status"] = "success"
-        results["message"] = "Tüm belirtilen görevler başarıyla işlendi."
+    print(f"--- Yeni Yetenek Entegrasyonu Başlatılıyor: {talent_name} (ID: {talent_id}) ---")
 
+    # Adım 1: İlk Kurulum ve Profil Oluşturma
+    print(f"1. {talent_name} için yetenek profili oluşturuluyor...")
+    # Gerçek bir uygulamada burada veritabanına kayıt veya bir HR sistemine API çağrısı yapılır.
+    integration_steps.append({"step": "Profil Oluşturma", "status": "completed"})
+    print("   Profil başarıyla oluşturuldu.")
 
-    return results
+    # Adım 2: Onboarding Görevlerinin Atanması
+    print(f"2. İlk onboarding görevleri atanıyor...")
+    default_onboarding_tasks = [
+        "İnsan Kaynakları evraklarını tamamlama",
+        "Kurumsal e-posta ve iletişim araçlarını kurma",
+        "Şirket politikalarını gözden geçirme",
+        "Hoş geldin oturumuna katılma"
+    ]
+    all_onboarding_tasks = default_onboarding_tasks + onboarding_checklist
+    # Gerçek bir uygulamada burada bir görev yönetim sistemine görevler eklenir.
+    integration_steps.append({
+        "step": "Onboarding Görev Ataması",
+        "tasks": all_onboarding_tasks,
+        "status": "completed"
+    })
+    print(f"   {len(all_onboarding_tasks)} adet onboarding görevi atandı.")
+
+    # Adım 3: Beceri Eşleştirme ve Takım Önerisi
+    print(f"3. Beceriler eşleştiriliyor: {', '.join(skills) if skills else 'Beceri belirtilmedi'}")
+    # Gerçek bir uygulamada burada mevcut projeler/takımlarla beceri eşleştirme algoritması çalıştırılır.
+    recommended_team = f"'{preferred_team_type}' ve becerilere göre bir takım (örn: Proje X Takımı)"
+    integration_steps.append({
+        "step": "Beceri Eşleştirme ve Takım Önerisi",
+        "recommended_team": recommended_team,
+        "status": "completed"
+    })
+    print(f"   Önerilen yerleştirme: {recommended_team}.")
+
+    # Adım 4: Kaynak Sağlama
+    print(f"4. Gerekli kaynaklar (yazılım lisansları, donanım vb.) sağlanıyor...")
+    # Gerçek bir uygulamada burada IT veya ilgili departmanlara talep gönderilir.
+    integration_steps.append({"step": "Kaynak Sağlama", "status": "completed"})
+    print("   Kaynaklar sağlandı.")
+
+    # Adım 5: Yönetici ve Mentor Ataması (eğer uygulanabilirse)
+    print(f"5. Yönetici atanıyor ve bir mentor belirleniyor...")
+    # Gerçek bir uygulamada burada bir atama sistemi veya yöneticinin onayı beklenir.
+    assigned_mentor = "Mentor X"  # Yer tutucu
+    integration_steps.append({
+        "step": "Yönetici ve Mentor Ataması",
+        "manager_id": manager_id,
+        "mentor": assigned_mentor,
+        "status": "completed"
+    })
+    print(f"   Yönetici: {manager_id}, Mentor: {assigned_mentor}.")
+
+    print(f"--- {talent_name} için entegrasyon süreci tamamlandı ---")
+
+    return {
+        "status": integration_status,
+        "message": integration_message,
+        "talent_id": talent_id,
+        "talent_name": talent_name,
+        "details": integration_steps,
+        "final_recommendation": recommended_team,
+        "assigned_manager": manager_id,
+        "assigned_mentor": assigned_mentor
+    }

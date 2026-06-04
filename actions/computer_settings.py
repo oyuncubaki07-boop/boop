@@ -240,6 +240,12 @@ def focus_search():
 
 def pause_video():      pyautogui.press("space")
 
+def play_pause():       pyautogui.press("playpause")
+
+def next_track():       pyautogui.press("nexttrack")
+
+def prev_track():       pyautogui.press("prevtrack")
+
 def refresh_page():
     if _OS == "Darwin": pyautogui.hotkey("command", "r")
     else:               pyautogui.press("f5")
@@ -508,7 +514,20 @@ ACTION_MAP: dict[str, callable] = {
     "sleep_display":       sleep_display,
     "screen_off":          sleep_display,
     "pause_video":         pause_video,
-    "play_pause":          pause_video,
+    "play_pause":          play_pause,
+    "pause":               play_pause,
+    "play":                play_pause,
+    "stop":                play_pause,
+    "durdur":              play_pause,
+    "duraklat":            play_pause,
+    "oynat":               play_pause,
+    "next_track":          next_track,
+    "prev_track":          prev_track,
+    "next":                next_track,
+    "prev":                prev_track,
+    "sonraki":             next_track,
+    "onceki":              prev_track,
+    "önceki":              prev_track,
     "close_app":           close_app,
     "close_window":        close_window,
     "full_screen":         full_screen,

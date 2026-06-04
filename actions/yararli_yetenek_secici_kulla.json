@@ -1,0 +1,8 @@
+{
+    "name": "yararli_yetenek_secici_kulla",
+    "description": "Konsey yetenegi: Yararli Yetenek Secici kullan",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}

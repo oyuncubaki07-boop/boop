@@ -1,0 +1,8 @@
+{
+    "name": "kod_rehberini_a",
+    "description": "Konsey yetenegi: Kod rehberini aç",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}
