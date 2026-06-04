@@ -1,5 +1,5 @@
 {
-    "name": "yararli_bir_yetenek_sec_ve_y",
+    "name": "safe_parameter_reader",
     "description": "Konsey yetenegi: Yararli bir yetenek sec ve yaz.",
     "parameters": {
         "type": "OBJECT",

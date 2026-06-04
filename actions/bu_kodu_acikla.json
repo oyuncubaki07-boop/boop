@@ -1,8 +1,0 @@
-{
-    "name": "bu_kodu_acikla",
-    "description": "Konsey yetenegi: Bu kodu acikla",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {}
-    }
-}

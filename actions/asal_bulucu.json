@@ -1,0 +1,8 @@
+{
+    "name": "asal_bulucu",
+    "description": "Otonom olarak \u00fcretilmi\u015f ve arenada test edilmi\u015f yetenek: 1'den 10000'e kadar olan asal say\u0131lar\u0131 bulan bir kod",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}

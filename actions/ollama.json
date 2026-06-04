@@ -1,8 +1,0 @@
-{
-    "name": "ollama",
-    "description": "Infinity evrim: ollama/ollama",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {}
-    }
-}
