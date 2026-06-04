@@ -1,0 +1,8 @@
+{
+    "name": "useful_skill_selector",
+    "description": "Konsey yetenegi: Yararli bir yetenek sec ve yaz.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}
