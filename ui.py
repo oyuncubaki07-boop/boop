@@ -23,7 +23,7 @@ from PyQt6.QtGui import (
     QRadialGradient, QShortcut,
 )
 from PyQt6.QtWidgets import (
-    QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit,
+    QApplication, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit,
     QMainWindow, QPushButton, QScrollArea, QSizePolicy, QTextEdit,
     QVBoxLayout, QWidget, QProgressBar,
 )
@@ -251,7 +251,18 @@ class HudCanvas(QWidget):
 
         self.muted    = False
         self.speaking = False
-        self.state    = "INITIALISING"
+        self.state    = "BAŞLATILIYOR"
+        self.visual_mode = "normal"  # normal | infinity | memory | alert | success
+
+        try:
+            from holo.themes import DEFAULT_THEME, apply_theme_to_class_c, get_theme
+            from core.config_loader import load_config
+            tid = str(load_config().get("holo_theme", DEFAULT_THEME))
+            self._holo_theme = get_theme(tid)
+            apply_theme_to_class_c(self._holo_theme, C)
+        except Exception:
+            from holo.themes import DEFAULT_THEME, get_theme
+            self._holo_theme = get_theme(DEFAULT_THEME)
 
         self._tick       = 0
         self._scale      = 1.0
@@ -266,12 +277,30 @@ class HudCanvas(QWidget):
         self._blink      = True
         self._blink_tick = 0
         self._particles: list[list[float]] = []
+        self._burst      = 0.0
+        self._wave_levels: list[float] = [0.1] * 40
         self._face_px: QPixmap | None = None
         self._load_face(face_path)
 
         self._tmr = QTimer(self)
         self._tmr.timeout.connect(self._step)
-        self._tmr.start(16)
+        self._tmr.start(16)  # ~60 FPS
+
+    def set_theme(self, theme_id: str):
+        try:
+            from holo.themes import apply_theme_to_class_c, get_theme
+            self._holo_theme = get_theme(theme_id)
+            apply_theme_to_class_c(self._holo_theme, C)
+            self.update()
+        except Exception:
+            pass
+
+    def trigger_success_burst(self):
+        self._burst = 1.0
+        self.visual_mode = "success"
+
+    def set_visual_mode(self, mode: str):
+        self.visual_mode = mode or "normal"
 
     def _load_face(self, path: str):
         try:
@@ -337,6 +366,16 @@ class HudCanvas(QWidget):
             for p in self._particles if p[4] > 0
         ]
 
+        if self._burst > 0:
+            self._burst = max(0.0, self._burst - 0.04)
+
+        try:
+            from holo.effects import generate_wave_levels
+            listening = self.state in ("LISTENING", "DİNLİYOR") and not self.speaking
+            self._wave_levels = generate_wave_levels(40, self._tick, self.speaking, listening)
+        except Exception:
+            pass
+
         self._blink_tick += 1
         if self._blink_tick >= 38:
             self._blink = not self._blink
@@ -346,17 +385,38 @@ class HudCanvas(QWidget):
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.fillRect(self.rect(), qcol(C.BG))
-
+        th = getattr(self, "_holo_theme", None)
         W, H = self.width(), self.height()
         cx, cy = W / 2, H / 2
         fw = min(W, H)
 
-        # grid dots
-        p.setPen(QPen(qcol(C.PRI_GHO), 1))
-        for x in range(0, W, 48):
-            for y in range(0, H, 48):
-                p.drawPoint(x, y)
+        p.fillRect(self.rect(), qcol(C.BG))
+        try:
+            from holo.effects import (
+                draw_alert_flash,
+                draw_data_streams,
+                draw_energy_burst,
+                draw_glass_vignette,
+                draw_hex_grid,
+                draw_neural_memory,
+                draw_voice_waves,
+            )
+            if th:
+                draw_hex_grid(p, W, H, th, self._tick, 22)
+                draw_glass_vignette(p, W, H, th)
+            alert = self.visual_mode == "alert" or "HATA" in self.state.upper()
+            draw_alert_flash(p, W, H, th, self._tick, alert) if th else None
+            if self.visual_mode == "infinity" and th:
+                draw_data_streams(p, cx, cy, fw, th, self._tick, 1.2)
+            if self.visual_mode == "memory" and th:
+                draw_neural_memory(p, cx, cy, fw, th, self._tick)
+            if th and self._burst > 0:
+                draw_energy_burst(p, cx, cy, fw, th, self._burst)
+        except Exception:
+            p.setPen(QPen(qcol(C.PRI_GHO), 1))
+            for x in range(0, W, 48):
+                for y in range(0, H, 48):
+                    p.drawPoint(x, y)
 
         r_face = fw * 0.31
 
@@ -465,18 +525,18 @@ class HudCanvas(QWidget):
         # status text
         sy = cy + fw * 0.40
         if self.muted:
-            txt, col = "⊘  MUTED",     qcol(C.MUTED_C)
+            txt, col = "⊘  SESSİZ",     qcol(C.MUTED_C)
         elif self.speaking:
-            txt, col = "●  SPEAKING",  qcol(C.ACC)
-        elif self.state == "THINKING":
+            txt, col = "●  KONUŞUYOR",  qcol(C.ACC)
+        elif self.state in ("THINKING", "DÜŞÜNÜYOR"):
             sym = "◈" if self._blink else "◇"
-            txt, col = f"{sym}  THINKING",   qcol(C.ACC2)
-        elif self.state == "PROCESSING":
+            txt, col = f"{sym}  DÜŞÜNÜYOR",   qcol(C.ACC2)
+        elif self.state in ("PROCESSING", "İŞLENİYOR"):
             sym = "▷" if self._blink else "▶"
-            txt, col = f"{sym}  PROCESSING", qcol(C.ACC2)
-        elif self.state == "LISTENING":
+            txt, col = f"{sym}  İŞLENİYOR", qcol(C.ACC2)
+        elif self.state in ("LISTENING", "DİNLİYOR"):
             sym = "●" if self._blink else "○"
-            txt, col = f"{sym}  LISTENING",  qcol(C.GREEN)
+            txt, col = f"{sym}  DİNLİYOR",  qcol(C.GREEN)
         else:
             sym = "●" if self._blink else "○"
             txt, col = f"{sym}  {self.state}", qcol(C.PRI)
@@ -485,20 +545,26 @@ class HudCanvas(QWidget):
         p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
         p.drawText(QRectF(0, sy, W, 26), Qt.AlignmentFlag.AlignCenter, txt)
 
-        # waveform
-        wy = sy + 30
-        N, bw = 36, 8
-        wx0 = (W - N * bw) / 2
-        for i in range(N):
-            if self.muted:
-                hgt, cl = 2, qcol(C.MUTED_C)
-            elif self.speaking:
-                hgt = random.randint(3, 20)
-                cl  = qcol(C.PRI) if hgt > 12 else qcol(C.PRI_DIM)
+        wy = sy + 28
+        try:
+            from holo.effects import draw_voice_waves
+            if th:
+                draw_voice_waves(p, cx, wy, W, th, self._wave_levels, self.speaking and not self.muted)
             else:
-                hgt = int(3 + 2 * math.sin(self._tick * 0.09 + i * 0.6))
-                cl  = qcol(C.BORDER_B)
-            p.fillRect(QRectF(wx0 + i * bw, wy + 20 - hgt, bw - 1, hgt), cl)
+                raise ImportError
+        except Exception:
+            N, bw = 36, 8
+            wx0 = (W - N * bw) / 2
+            for i in range(N):
+                if self.muted:
+                    hgt, cl = 2, qcol(C.MUTED_C)
+                elif self.speaking:
+                    hgt = random.randint(3, 20)
+                    cl = qcol(C.PRI) if hgt > 12 else qcol(C.PRI_DIM)
+                else:
+                    hgt = int(3 + 2 * math.sin(self._tick * 0.09 + i * 0.6))
+                    cl = qcol(C.BORDER_B)
+                p.fillRect(QRectF(wx0 + i * bw, wy + 20 - hgt, bw - 1, hgt), cl)
 
 class MetricBar(QWidget):
 
@@ -606,7 +672,7 @@ class LogWidget(QTextEdit):
         self._text   = self._queue.pop(0)
         self._pos    = 0
         tl = self._text.lower()
-        if   tl.startswith("you:"):    self._tag = "you"
+        if   tl.startswith("you:") or tl.startswith("sen:"):    self._tag = "you"
         elif tl.startswith("jarvis:"): self._tag = "ai"
         elif tl.startswith("file:"):   self._tag = "file"
         elif "err" in tl:              self._tag = "err"
@@ -733,7 +799,7 @@ class FileDropZone(QWidget):
 
     def _browse(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Select a file for JARVIS", str(Path.home()),
+            self, "JARVIS icin dosya secin", str(Path.home()),
             "All Files (*.*);;"
             "Images (*.jpg *.jpeg *.png *.gif *.webp *.bmp *.svg);;"
             "Documents (*.pdf *.docx *.txt *.md *.pptx);;"
@@ -794,11 +860,11 @@ class _DropCanvas(QWidget):
         p.setFont(QFont("Courier New", 8))
         p.setPen(QPen(qcol(C.PRI_DIM if not hover else C.TEXT), 1))
         p.drawText(QRectF(0, cy + 8, W, 16), Qt.AlignmentFlag.AlignCenter,
-                   "Drop file here  or  Click to Browse")
+                   "Dosyayi buraya birakin  veya  Tiklayin")
         p.setFont(QFont("Courier New", 7))
         p.setPen(QPen(qcol("#1a4a5a"), 1))
         p.drawText(QRectF(0, cy + 24, W, 14), Qt.AlignmentFlag.AlignCenter,
-                   "Images · Video · Audio · PDF · Docs · Code · Data")
+                   "Gorsel · Video · Ses · PDF · Belge · Kod · Veri")
 
     def _paint_drag_over(self, p, W, H):
         cx, cy = W / 2, H / 2
@@ -807,7 +873,7 @@ class _DropCanvas(QWidget):
         p.drawText(QRectF(0, cy - 24, W, 32), Qt.AlignmentFlag.AlignCenter, "⬇")
         p.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
         p.setPen(QPen(qcol(C.PRI), 1))
-        p.drawText(QRectF(0, cy + 12, W, 16), Qt.AlignmentFlag.AlignCenter, "Release to load")
+        p.drawText(QRectF(0, cy + 12, W, 16), Qt.AlignmentFlag.AlignCenter, "Birakinca yuklenecek")
 
     def _paint_file(self, p, W, H):
         path = Path(self._z._current_file)
@@ -887,15 +953,15 @@ class SetupOverlay(QWidget):
             w.setStyleSheet(f"color: {color}; background: transparent;")
             return w
 
-        layout.addWidget(_lbl("◈  INITIALISATION REQUIRED", 13, True))
-        layout.addWidget(_lbl("Configure J.A.R.V.I.S. before first boot.", 9, color=C.PRI_DIM))
+        layout.addWidget(_lbl("◈  ILK KURULUM GEREKLI", 13, True))
+        layout.addWidget(_lbl("J.A.R.V.I.S. ilk acilista yapilandirilmalidir.", 9, color=C.PRI_DIM))
         layout.addSpacing(6)
 
         sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER};"); layout.addWidget(sep)
         layout.addSpacing(4)
 
-        layout.addWidget(_lbl("GEMINI API KEY", 8, color=C.TEXT_DIM,
+        layout.addWidget(_lbl("GEMINI API ANAHTARI", 8, color=C.TEXT_DIM,
                                align=Qt.AlignmentFlag.AlignLeft))
         self._key_input = QLineEdit()
         self._key_input.setEchoMode(QLineEdit.EchoMode.Password)
@@ -912,7 +978,7 @@ class SetupOverlay(QWidget):
         layout.addWidget(self._key_input)
         layout.addSpacing(8)
 
-        layout.addWidget(_lbl("OPENROUTER API KEY", 8, color=C.TEXT_DIM,
+        layout.addWidget(_lbl("OPENROUTER API ANAHTARI", 8, color=C.TEXT_DIM,
                        align=Qt.AlignmentFlag.AlignLeft))
         self._or_input = QLineEdit()
         self._or_input.setEchoMode(QLineEdit.EchoMode.Password)
@@ -934,10 +1000,10 @@ class SetupOverlay(QWidget):
         sep2.setStyleSheet(f"color: {C.BORDER};"); layout.addWidget(sep2)
         layout.addSpacing(4)
 
-        layout.addWidget(_lbl("OPERATING SYSTEM", 8, color=C.TEXT_DIM,
+        layout.addWidget(_lbl("ISLETIM SISTEMI", 8, color=C.TEXT_DIM,
                                align=Qt.AlignmentFlag.AlignLeft))
         det_name = {"windows": "Windows", "mac": "macOS", "linux": "Linux"}[detected]
-        layout.addWidget(_lbl(f"Auto-detected: {det_name}", 8, color=C.ACC2,
+        layout.addWidget(_lbl(f"Otomatik algilandi: {det_name}", 8, color=C.ACC2,
                                align=Qt.AlignmentFlag.AlignLeft))
 
         os_row = QHBoxLayout(); os_row.setSpacing(6)
@@ -954,7 +1020,7 @@ class SetupOverlay(QWidget):
         self._sel(detected)
         layout.addSpacing(12)
 
-        init_btn = QPushButton("▸  INITIALISE SYSTEMS")
+        init_btn = QPushButton("▸  SISTEMI BASLAT")
         init_btn.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
         init_btn.setFixedHeight(36)
         init_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1012,6 +1078,7 @@ class SetupOverlay(QWidget):
 class MainWindow(QMainWindow):
     _log_sig   = pyqtSignal(str)
     _state_sig = pyqtSignal(str)
+    _open_rehber_sig = pyqtSignal()
 
     def __init__(self, face_path: str):
         super().__init__()
@@ -1068,6 +1135,7 @@ class MainWindow(QMainWindow):
 
         self._log_sig.connect(self._log.append_log)
         self._state_sig.connect(self._apply_state)
+        self._open_rehber_sig.connect(self._on_open_kod_rehberi)
 
         self._overlay: SetupOverlay | None = None
         self._ready = self._check_config()
@@ -1078,6 +1146,139 @@ class MainWindow(QMainWindow):
         sc_mute.activated.connect(self._toggle_mute)
         sc_full = QShortcut(QKeySequence("F11"), self)
         sc_full.activated.connect(self._toggle_fullscreen)
+        sc_holo = QShortcut(QKeySequence("F10"), self)
+        sc_holo.activated.connect(self._toggle_holo_mode)
+        self._holo_mode = False
+
+    def _toggle_holo_mode(self):
+        """Tam ekran holografik cekirdek — yan panelleri gizle."""
+        self._holo_mode = not self._holo_mode
+        self._left_panel.setVisible(not self._holo_mode)
+        self._right_panel.setVisible(not self._holo_mode)
+        if self._holo_mode:
+            self.showFullScreen()
+            self._log_sig.emit("SİSTEM: Holografik tam ekran modu (F10 ile cik).")
+        elif not self.isFullScreen():
+            pass
+        else:
+            self.showNormal()
+
+    def _on_theme_changed(self, index: int):
+        try:
+            from holo.themes import THEMES
+            keys = list(THEMES.keys())
+            if 0 <= index < len(keys):
+                tid = keys[index]
+                self.hud.set_theme(tid)
+                self._apply_holo_chrome()
+                self._log_sig.emit(f"SİSTEM: Tema — {THEMES[tid].label}")
+                try:
+                    import json
+                    from core.config_loader import get_base_dir
+                    path = get_base_dir() / "config" / "api_keys.json"
+                    data = json.loads(path.read_text(encoding="utf-8"))
+                    data["holo_theme"] = tid
+                    path.write_text(json.dumps(data, indent=4, ensure_ascii=False), encoding="utf-8")
+                except Exception:
+                    pass
+        except Exception as exc:
+            self._log_sig.emit(f"Tema: {exc}")
+
+    def _apply_holo_chrome(self):
+        """Header ve panelleri secili temaya gore guncelle."""
+        self.setStyleSheet(f"background: {C.BG};")
+        if hasattr(self, "_header_w"):
+            self._header_w.setStyleSheet(
+                f"background: {C.DARK}; border-bottom: 1px solid {C.BORDER_B};"
+            )
+
+    def _on_open_kod_rehberi(self):
+        try:
+            from kod_rehberi_window import open_kod_rehberi
+            open_kod_rehberi()
+        except Exception as exc:
+            self._log_sig.emit(f"Kod rehberi: {exc}")
+
+    def set_evolution_refresh(self, cb):
+        self._evo_refresh_cb = cb
+
+    def set_offline_handler(self, cb):
+        self._offline_cb = cb
+
+    def set_offline_mode(self, enabled: bool):
+        self._offline_chk.setChecked(bool(enabled))
+        self._style_offline_btn()
+
+    def update_evolution_pending(self, items: list):
+        self._pending_evolution = items or []
+        if not self._pending_evolution:
+            self._evo_lbl.setText("Evrim: bekleyen yok")
+        else:
+            names = ", ".join(p.get("name", "?") for p in self._pending_evolution[:3])
+            self._evo_lbl.setText(f"Evrim onay: {names}")
+
+    def _style_offline_btn(self):
+        if self._offline_chk.isChecked():
+            self._offline_chk.setText("🖥  YEREL (OLLAMA)")
+        else:
+            self._offline_chk.setText("🌐  BULUT MODU")
+
+    def _toggle_offline(self):
+        self._style_offline_btn()
+        if self._offline_cb:
+            try:
+                self._offline_cb(self._offline_chk.isChecked())
+            except Exception:
+                pass
+        mode = "yerel" if self._offline_chk.isChecked() else "bulut"
+        self._log_sig.emit(f"SİSTEM: {mode.upper()} modu secildi.")
+
+    def _evolution_approve(self):
+        if not self._pending_evolution:
+            self._log_sig.emit("Evrim: onay bekleyen yetenek yok.")
+            return
+        name = self._pending_evolution[0].get("name", "")
+        try:
+            from omega.evolution_queue import approve_tool
+            if approve_tool(name):
+                self.hud.trigger_success_burst()
+                self._log_sig.emit(f"Evrim: {name} onaylandi ve eklendi.")
+            else:
+                self._log_sig.emit(f"Evrim: {name} onaylanamadi.")
+        except Exception as exc:
+            self._log_sig.emit(f"Evrim: {exc}")
+        if self._evo_refresh_cb:
+            self._evo_refresh_cb()
+
+    def _evolution_reject(self):
+        if not self._pending_evolution:
+            return
+        name = self._pending_evolution[0].get("name", "")
+        try:
+            from omega.evolution_queue import reject_tool
+            reject_tool(name)
+            self._log_sig.emit(f"Evrim: {name} reddedildi.")
+        except Exception as exc:
+            self._log_sig.emit(f"Evrim: {exc}")
+        if self._evo_refresh_cb:
+            self._evo_refresh_cb()
+
+    def _infinity_quick(self, action: str):
+        import threading
+        self.hud.visual_mode = "infinity"
+        self._log_sig.emit(f"INFINITY: {action} baslatildi...")
+
+        def _run():
+            try:
+                from infinity.core import get_infinity
+                r = get_infinity().run(action, "")
+                self._log_sig.emit(str(r)[:700])
+                if self._evo_refresh_cb:
+                    self._evo_refresh_cb()
+            except Exception as exc:
+                self._log_sig.emit(f"INFINITY: {exc}")
+
+        threading.Thread(target=_run, daemon=True).start()
 
     def _toggle_fullscreen(self):
         if self.isFullScreen():
@@ -1149,6 +1350,7 @@ class MainWindow(QMainWindow):
 
     def _build_header(self) -> QWidget:
         w = QWidget()
+        self._header_w = w
         w.setFixedHeight(54)
         w.setStyleSheet(f"background: {C.DARK}; border-bottom: 1px solid {C.BORDER_B};")
         lay = QHBoxLayout(w)
@@ -1161,6 +1363,28 @@ class MainWindow(QMainWindow):
             return l
 
         lay.addWidget(_badge("MARK XXXIX", C.PRI_DIM))
+
+        self._theme_combo = QComboBox()
+        try:
+            from holo.themes import DEFAULT_THEME, THEMES
+            from core.config_loader import load_config
+            cur = str(load_config().get("holo_theme", DEFAULT_THEME))
+            for tid, th in THEMES.items():
+                self._theme_combo.addItem(f"◈ {th.label}", tid)
+                if tid == cur:
+                    self._theme_combo.setCurrentIndex(self._theme_combo.count() - 1)
+        except Exception:
+            self._theme_combo.addItem("◈ Stark Lab", "stark_lab")
+        self._theme_combo.setFont(QFont("Courier New", 7))
+        self._theme_combo.setStyleSheet(
+            f"QComboBox {{ background:{C.PANEL2}; color:{C.PRI}; border:1px solid {C.BORDER}; "
+            f"padding:2px 6px; border-radius:3px; min-width:110px; }}"
+            f"QComboBox::drop-down {{ border:none; }}"
+        )
+        self._theme_combo.blockSignals(True)
+        self._theme_combo.currentIndexChanged.connect(self._on_theme_changed)
+        self._theme_combo.blockSignals(False)
+        lay.addWidget(self._theme_combo)
         lay.addStretch()
 
         mid = QVBoxLayout(); mid.setSpacing(1)
@@ -1169,7 +1393,7 @@ class MainWindow(QMainWindow):
         title.setFont(QFont("Courier New", 17, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         mid.addWidget(title)
-        sub = QLabel("Just A Rather Very Intelligent System")
+        sub = QLabel("OMEGA INFINITY — Holografik Arayuz")
         sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sub.setFont(QFont("Courier New", 7))
         sub.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
@@ -1203,7 +1427,7 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(8, 10, 8, 10)
         lay.setSpacing(6)
 
-        hdr = QLabel("◈ SYS MONITOR")
+        hdr = QLabel("◈ SİSTEM İZLEME")
         hdr.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
         hdr.setStyleSheet(f"color: {C.PRI}; background: transparent; "
                           f"border-bottom: 1px solid {C.BORDER}; padding-bottom: 4px;")
@@ -1250,9 +1474,9 @@ class MainWindow(QMainWindow):
         lay.addStretch()
 
         for txt, col in [
-            ("AI CORE\nACTIVE",     C.GREEN),
-            ("SEC\nCLEARED",        C.PRI),
-            ("PROTOCOL\nXXXVIII",   C.TEXT_DIM),
+            ("AI ÇEKİRDEK\nAKTİF",     C.GREEN),
+            ("GÜVENLİK\nTAMAM",        C.PRI),
+            ("PROTOKOL\nXXXVIII",   C.TEXT_DIM),
         ]:
             lbl = QLabel(txt)
             lbl.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
@@ -1278,7 +1502,7 @@ class MainWindow(QMainWindow):
             l.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
             return l
 
-        lay.addWidget(_sec("ACTIVITY LOG"))
+        lay.addWidget(_sec("ETKİNLİK GÜNLÜĞÜ"))
         self._log = LogWidget()
         lay.addWidget(self._log, stretch=1)
 
@@ -1286,12 +1510,74 @@ class MainWindow(QMainWindow):
         sep.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
         lay.addWidget(sep)
 
-        lay.addWidget(_sec("FILE UPLOAD"))
+        lay.addWidget(_sec("JARVIS OMEGA"))
+        self._offline_chk = QPushButton("🌐  BULUT MODU")
+        self._offline_chk.setCheckable(True)
+        self._offline_chk.setChecked(False)
+        self._offline_chk.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._offline_chk.clicked.connect(self._toggle_offline)
+        self._offline_chk.setStyleSheet(f"""
+            QPushButton {{
+                background: {C.PANEL2}; color: {C.PRI};
+                border: 1px solid {C.BORDER}; border-radius: 3px; padding: 5px;
+                font-family: 'Courier New'; font-size: 8px;
+            }}
+            QPushButton:checked {{
+                background: #1a1400; color: {C.ACC2}; border-color: {C.ACC2};
+            }}
+        """)
+        lay.addWidget(self._offline_chk)
+
+        self._evo_lbl = QLabel("Evrim: bekleyen yok")
+        self._evo_lbl.setWordWrap(True)
+        self._evo_lbl.setFont(QFont("Courier New", 7))
+        self._evo_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
+        lay.addWidget(self._evo_lbl)
+
+        evo_row = QHBoxLayout()
+        self._evo_approve = QPushButton("✓ Onayla")
+        self._evo_reject = QPushButton("✕ Reddet")
+        for b, col in ((self._evo_approve, C.GREEN), (self._evo_reject, "#ff4466")):
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setStyleSheet(
+                f"QPushButton {{ background:{C.PANEL2}; color:{col}; "
+                f"border:1px solid {col}; border-radius:3px; padding:4px; font-size:8px; }}"
+            )
+            evo_row.addWidget(b)
+        self._evo_approve.clicked.connect(self._evolution_approve)
+        self._evo_reject.clicked.connect(self._evolution_reject)
+        lay.addLayout(evo_row)
+
+        inf_row = QHBoxLayout()
+        for label, act in (
+            ("📊 Rapor", "daily_report"),
+            ("⭐ GitHub", "github_trend"),
+            ("📄 arXiv", "arxiv"),
+        ):
+            b = QPushButton(label)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setStyleSheet(
+                f"QPushButton {{ background:{C.PANEL2}; color:{C.ACC2}; "
+                f"border:1px solid {C.BORDER}; border-radius:3px; padding:3px; font-size:7px; }}"
+            )
+            b.clicked.connect(lambda _=False, a=act: self._infinity_quick(a))
+            inf_row.addWidget(b)
+        lay.addLayout(inf_row)
+
+        self._pending_evolution: list = []
+        self._evo_refresh_cb = None
+        self._offline_cb = None
+
+        sep2 = QFrame(); sep2.setFrameShape(QFrame.Shape.HLine)
+        sep2.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
+        lay.addWidget(sep2)
+
+        lay.addWidget(_sec("DOSYA YÜKLEME"))
         self._drop_zone = FileDropZone()
         self._drop_zone.file_selected.connect(self._on_file_selected)
         lay.addWidget(self._drop_zone)
 
-        self._file_hint = QLabel("No file loaded — drop or click above to upload")
+        self._file_hint = QLabel("Dosya yok — yukarıdan sürükleyin veya tıklayın")
         self._file_hint.setFont(QFont("Courier New", 7))
         self._file_hint.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
         self._file_hint.setWordWrap(True)
@@ -1301,10 +1587,10 @@ class MainWindow(QMainWindow):
         sep2.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
         lay.addWidget(sep2)
 
-        lay.addWidget(_sec("COMMAND INPUT"))
+        lay.addWidget(_sec("KOMUT GİRİŞİ"))
         lay.addLayout(self._build_input_row())
 
-        self._mute_btn = QPushButton("🎙  MICROPHONE ACTIVE")
+        self._mute_btn = QPushButton("🎙  MİKROFON AÇIK")
         self._mute_btn.setFixedHeight(30)
         self._mute_btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
         self._mute_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1312,7 +1598,7 @@ class MainWindow(QMainWindow):
         self._style_mute_btn()
         lay.addWidget(self._mute_btn)
 
-        fs_btn = QPushButton("⛶  FULLSCREEN  [F11]")
+        fs_btn = QPushButton("⛶  TAM EKRAN  [F11]")
         fs_btn.setFixedHeight(26)
         fs_btn.setFont(QFont("Courier New", 7))
         fs_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1333,7 +1619,7 @@ class MainWindow(QMainWindow):
     def _build_input_row(self) -> QHBoxLayout:
         row = QHBoxLayout(); row.setSpacing(5)
         self._input = QLineEdit()
-        self._input.setPlaceholderText("Type a command or question…")
+        self._input.setPlaceholderText("Komut veya soru yazın…")
         self._input.setFont(QFont("Courier New", 9))
         self._input.setFixedHeight(30)
         self._input.setStyleSheet(f"""
@@ -1372,7 +1658,7 @@ class MainWindow(QMainWindow):
             l.setStyleSheet(f"color: {color}; background: transparent;")
             return l
 
-        lay.addWidget(_fl("[F4] Mute  ·  [F11] Fullscreen"))
+        lay.addWidget(_fl("[F4] Sessiz  ·  [F11] Tam Ekran"))
         lay.addStretch()
         lay.addWidget(_fl("FatihMakes Industries  ·  MARK XXXIX  ·  CLASSIFIED"))
         lay.addStretch()
@@ -1386,7 +1672,7 @@ class MainWindow(QMainWindow):
         icon, _ = _FILE_ICONS.get(cat, _FILE_ICONS["unknown"])
         size = _fmt_size(p.stat().st_size)
         self._file_hint.setText(f"{icon}  {p.name}  ·  {size}  ·  Tell JARVIS what to do with it")
-        self._log.append_log(f"FILE: {p.name} ({size}) loaded")
+        self._log.append_log(f"DOSYA: {p.name} ({size}) yuklendi")
         if self.on_text_command:
             msg = (
                 f"[FILE_UPLOADED] path={path} | name={p.name} | "
@@ -1401,15 +1687,15 @@ class MainWindow(QMainWindow):
         self.hud.muted = self._muted
         self._style_mute_btn()
         if self._muted:
-            self._apply_state("MUTED")
-            self._log.append_log("SYS: Microphone muted.")
+            self._apply_state("SESSİZ")
+            self._log.append_log("SİSTEM: Mikrofon kapalı.")
         else:
-            self._apply_state("LISTENING")
-            self._log.append_log("SYS: Microphone active.")
+            self._apply_state("DİNLİYOR")
+            self._log.append_log("SİSTEM: Mikrofon açık.")
 
     def _style_mute_btn(self):
         if self._muted:
-            self._mute_btn.setText("🔇  MICROPHONE MUTED")
+            self._mute_btn.setText("🔇  MİKROFON KAPALI")
             self._mute_btn.setStyleSheet(f"""
                 QPushButton {{
                     background: #140006; color: {C.MUTED_C};
@@ -1417,7 +1703,7 @@ class MainWindow(QMainWindow):
                 }}
             """)
         else:
-            self._mute_btn.setText("🎙  MICROPHONE ACTIVE")
+            self._mute_btn.setText("🎙  MİKROFON AÇIK")
             self._mute_btn.setStyleSheet(f"""
                 QPushButton {{
                     background: #00140a; color: {C.GREEN};
@@ -1430,13 +1716,22 @@ class MainWindow(QMainWindow):
         txt = self._input.text().strip()
         if not txt: return
         self._input.clear()
-        self._log.append_log(f"You: {txt}")
+        self._log.append_log(f"Sen: {txt}")
         if self.on_text_command:
             threading.Thread(target=self.on_text_command, args=(txt,), daemon=True).start()
 
     def _apply_state(self, state: str):
-        self.hud.state    = state
-        self.hud.speaking = (state == "SPEAKING")
+        self.hud.state = state
+        self.hud.speaking = state in ("SPEAKING", "KONUŞUYOR")
+        su = state.upper()
+        if "HATA" in su or "ERR" in su:
+            self.hud.visual_mode = "alert"
+        elif state in ("DÜŞÜNÜYOR", "THINKING", "İŞLENİYOR", "PROCESSING"):
+            self.hud.visual_mode = "normal"
+        elif "INFINITY" in su:
+            self.hud.visual_mode = "infinity"
+        elif self.hud.visual_mode == "success" and self.hud._burst <= 0:
+            self.hud.visual_mode = "normal"
 
     def _check_config(self) -> bool:
         if not API_FILE.exists(): return False
@@ -1476,8 +1771,8 @@ class MainWindow(QMainWindow):
         if self._overlay:
             self._overlay.hide()
             self._overlay = None
-        self._apply_state("LISTENING")
-        self._log.append_log(f"SYS: Initialised. OS={os_name.upper()}. JARVIS online.")
+        self._apply_state("DİNLİYOR")
+        self._log.append_log(f"SİSTEM: Kurulum tamam. OS={os_name.upper()}. JARVIS çevrimiçi.")
 
 class _RootShim:
     def __init__(self, app: QApplication):
@@ -1523,13 +1818,32 @@ class JarvisUI:
     def write_log(self, text: str):
         self._win._log_sig.emit(text)
 
+    def open_kod_rehberi(self):
+        """Ikinci pencere — ana UI thread'inde acilir."""
+        self._win._open_rehber_sig.emit()
+
+    def set_offline_mode(self, enabled: bool):
+        self._win.set_offline_mode(enabled)
+
+    def set_evolution_refresh(self, cb):
+        self._win.set_evolution_refresh(cb)
+
+    def update_evolution_pending(self, items: list):
+        self._win.update_evolution_pending(items)
+
+    def bind_jarvis(self, jarvis_live):
+        """Offline toggle ve evrim yenileme."""
+        self._win.set_offline_handler(
+            lambda on: jarvis_live.set_offline_mode(on) if jarvis_live else None
+        )
+
     def wait_for_api_key(self):
         while not self._win._ready:
             time.sleep(0.1)
 
     def start_speaking(self):
-        self.set_state("SPEAKING")
+        self.set_state("KONUŞUYOR")
 
     def stop_speaking(self):
         if not self.muted:
-            self.set_state("LISTENING")
+            self.set_state("DİNLİYOR")

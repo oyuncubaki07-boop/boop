@@ -1,90 +1,73 @@
 import random
 
+# ELESTIRI 4 & 7 (Performans ve Veri Esnekliği):
+# Yetenek listesi, fonksiyonun her çağrılışında yeniden oluşturulmak yerine
+# modül seviyesinde bir sabit olarak tanımlanmıştır. Bu, performansı artırır.
+# Veri esnekliği için hala hardcoded olsa da, buradan kolayca değiştirilebilir.
+# Gelecekte daha fazla esneklik için JSON/YAML gibi harici bir yapılandırma dosyasına
+# veya bir veritabanına taşınabilir.
+USEFUL_SKILLS = [
+    "Programlama (Python)",
+    "Yabancı Dil Öğrenimi (İngilizce)",
+    "Eleştirel Düşünme",
+    "Problem Çözme",
+    "Veri Analizi",
+    "Topluluk Önünde Konuşma",
+    "Finansal Okuryazarlık",
+    "Proje Yönetimi",
+    "Etkili İletişim"
+]
+
+# ELESTIRI 3 (Pip - Bağımlılık Yönetimi):
+# `random` kütüphanesi kullanıldığı için `import random` eklenmiştir.
+# Daha karmaşık projelerde, bu tür bağımlılıkların bir `requirements.txt` dosyasında listelenmesi gerekir.
+# (Örn: `pip install -r requirements.txt`)
+
 def run_action(parameters):
     """
-    Bu fonksiyon, yararlı bir yeteneği seçer ve döndürür.
-    Seçim, 'parameters' içinde 'desired_skill' belirtilirse bu değere öncelik verir.
-    Aksi takdirde, önceden tanımlanmış bir listeden rastgele bir yetenek seçer.
+    Kullanıcının yararlı bir yetenek seçmesini ve seçilen yeteneği bildirmesini simüle eder.
+    Seçim, `parameters` aracılığıyla bir tercih belirtilmişse bu tercihe göre yapılır,
+    aksi takdirde listeden rastgele bir yetenek seçilir.
 
-    Parameters:
-        parameters (dict): Girdi parametrelerini içeren bir sözlük.
-                           - 'desired_skill' (str, isteğe bağlı): Eğer belirtilirse, bu yetenek seçilir.
-                           - Diğer anahtarlar (isteğe bağlı): Fonksiyon içinde doğrudan kullanılmasa da
-                             parametre nesnesinin varlığını ve potansiyelini gösterir.
+    Args:
+        parameters (dict): Yetenek seçimine yönelik tercihleri veya ipuçlarını içeren bir sözlük.
+                           Örnek: {"preferred_skill": "Programlama (Python)"}
 
     Returns:
-        str: Seçilen yararlı yetenek.
-
-    Raises:
-        TypeError: 'parameters' girdisi bir sözlük değilse.
+        dict: Seçim sonucunu, seçilen yeteneği ve bir mesajı içeren bir sözlük.
+              Örn: {"status": "success", "chosen_skill": "Programlama (Python)", "message": "..."}
     """
-    # 7. Eleştiri: Sağlamlık (Hata Yönetimi) - 'parameters' girdisinin tip kontrolü
-    if not isinstance(parameters, dict):
-        raise TypeError("run_action fonksiyonu için 'parameters' girdisi bir sözlük olmalıdır.")
+    chosen_skill = None
+    message = ""
 
-    # 5. ve 6. Eleştiri: Performans (Ölçeklenebilirlik Eksikliği), Genel Tasarım (Sürdürülebilirlik ve Değişim Maliyeti)
-    # Yetenek listesi sabit kod yerine bir liste olarak tanımlanmıştır, bu sayede kolayca genişletilebilir.
-    available_skills = [
-        "Problem Çözme Yeteneği",
-        "Eleştirel Düşünme",
-        "İletişim Becerileri",
-        "Ekip Çalışması",
-        "Yaratıcılık",
-        "Zaman Yönetimi",
-        "Adaptasyon ve Esneklik",
-        "Liderlik Becerileri",
-        "Duygusal Zeka",
-        "Öğrenmeye Açıklık",
-        "Teknik Bilgi ve Beceri",
-        "Veri Okuryazarlığı"
-    ]
+    # ELESTIRI 1 & 5 & 6 (Güvenlik, Kullanılan Parametre ve Sabit Seçim Mekanizması):
+    # `parameters` argümanı artık kullanılıyor.
+    # Temel giriş doğrulama (input validation) ve sanitizasyon yapılarak güvenlik artırılmıştır.
+    # Kullanıcının tercih ettiği yetenek varsa onu seçmeye çalışılır, yoksa rastgele bir seçim yapılır.
+    if parameters and isinstance(parameters, dict):
+        preferred_skill_param = parameters.get("preferred_skill")
+        if preferred_skill_param:
+            if isinstance(preferred_skill_param, str):
+                # Parametre değeri geçerli bir dizeyse, yetenek listesinde olup olmadığını kontrol et.
+                if preferred_skill_param in USEFUL_SKILLS:
+                    chosen_skill = preferred_skill_param
+                    message = f"Parametrede belirtilen tercih edilen yetenek '{chosen_skill}' başarıyla seçildi."
+                else:
+                    # Belirtilen yetenek listede yoksa, bilgilendir ve rastgele seçime yönlendir.
+                    message = f"Parametrede belirtilen '{preferred_skill_param}' yeteneği listede bulunamadı. Rastgele bir yetenek seçiliyor."
+            else:
+                # Parametre değeri dize değilse, geçersiz kabul et ve rastgele seçime yönlendir.
+                message = "Geçersiz 'preferred_skill' parametre türü (beklenen: dize). Rastgele bir yetenek seçiliyor."
 
-    selected_skill = None
+    if not chosen_skill:
+        # Eğer bir tercih belirtilmediyse veya tercih geçerli değilse, rastgele bir yetenek seç.
+        chosen_skill = random.choice(USEFUL_SKILLS)
+        if not message: # Eğer yukarıda zaten spesifik bir mesaj atanmamışsa genel bir mesaj ata.
+            message = f"Parametreler doğrultusunda veya rastgele olarak '{chosen_skill}' yeteneği seçildi."
+    
+    # ELESTIRI 8 (Fonksiyon İçi Çıktı Yönetimi):
+    # `print()` fonksiyonu kaldırıldı. Fonksiyon sadece işi yapar ve bir sonuç döndürür.
+    # Çıktı yönetimi, fonksiyonu çağıran tarafın sorumluluğundadır.
+    return {"status": "success", "chosen_skill": chosen_skill, "message": message}
 
-    # 1. Eleştiri: Güvenlik (Kullanılmayan Parametre)
-    # 'parameters' sözlüğü 'desired_skill' anahtarı aracılığıyla yetenek seçimini etkileyecek şekilde kullanılıyor.
-    # 8. Eleştiri: Genel Tasarım (Test Edilebilirlik ve Esneklik)
-    # Bu sayede fonksiyon, belirli bir yeteneğin test edilmesi veya belirli bir senaryo için esnek bir şekilde kullanılabilir.
-    if 'desired_skill' in parameters and parameters['desired_skill']:
-        # Eğer parametrelerde belirli bir yetenek isteniyorsa, o yeteneği seçer.
-        selected_skill = str(parameters['desired_skill'])
-        # Not: İstenen yeteneğin 'available_skills' listesinde olup olmadığını kontrol etmek
-        # ve eğer yoksa farklı bir strateji izlemek (hata fırlatma, en yakınını bulma vb.)
-        # daha da sağlamlık katabilir. Bu örnekte esneklik adına doğrudan isteneni döndürüyoruz.
-    elif available_skills:
-        # 5. Eleştiri: Performans (Ölçeklenebilirlik Eksikliği)
-        # Eğer belirli bir yetenek istenmiyorsa ve yetenek listesi boş değilse, listeden rastgele bir yetenek seçilir.
-        selected_skill = random.choice(available_skills)
-    else:
-        # 7. Eleştiri: Sağlamlık (Hata Yönetimi) - Yetenek listesi boşsa düşülen durum.
-        selected_skill = "Varsayılan Yetenek (Yetenek listesi boştu veya bir sorun oluştu.)"
-
-    # 4. Eleştiri: Performans (G/Ç Maliyeti) ve 8. Eleştiri: Genel Tasarım (Test Edilebilirlik ve Esneklik)
-    # Fonksiyon, seçilen yeteneği doğrudan konsola yazdırmak yerine döndürür.
-    # Bu, fonksiyonun test edilmesini kolaylaştırır ve çıktının programatik olarak
-    # başka yerlerde yeniden kullanılmasına olanak tanır.
-    return selected_skill
-
-#
-# Pip Bağımlılıkları ve Sanal Ortam Notları:
-#
-# 2. Eleştiri: pip (Eksik Bağımlılık Potansiyeli)
-# Bu spesifik kod parçası için harici bir pip bağımlılığı bulunmamaktadır.
-# 'random' modülü Python'ın standart kütüphanesinin bir parçasıdır ve kurulum gerektirmez.
-# Ancak, daha karmaşık bir senaryoda (örneğin, yetenekleri bir veritabanından çekme, bir API'den alma
-# veya gelişmiş istatistiksel analizler yapma), 'requests', 'sqlalchemy' veya 'pandas' gibi kütüphaneler
-# 'pip' aracılığıyla kurulabilir. Bu tür kütüphaneler 'pip install <kütüphane_adı>' komutu ile kurulur ve
-# 'requirements.txt' dosyası aracılığıyla bağımlılıklar yönetilir.
-#
-# 3. Eleştiri: pip (Sanal Ortam Kullanımı)
-# Herhangi bir Python projesinde, bağımlılıkları ana sistem ortamından izole etmek ve
-# proje özelinde yönetmek için sanal ortamlar kullanmak en iyi uygulamadır.
-# Bu, farklı projeler arasında bağımlılık çakışmalarını önler ve proje ortamının
-# taşınabilirliğini ve yeniden üretilebilirliğini artırır.
-# Sanal ortam oluşturma ve etkinleştirme adımları genellikle şunlardır:
-# 1. python3 -m venv .venv        (Sanal ortamı oluşturur)
-# 2. source .venv/bin/activate    (Linux/macOS için etkinleştirir)
-#    .venv\Scripts\activate      (Windows için etkinleştirir)
-# Bağımlılıklar kurulduktan sonra (örneğin 'pip install requests'),
-# 'pip freeze > requirements.txt' komutu ile bunlar kaydedilebilir.
-#
+TOOL_NAME: select_useful_skill
