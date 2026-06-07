@@ -380,11 +380,55 @@ def _handle_trending(parameters: dict, player, speak) -> str:
 
     return result
 
+def _handle_generate(parameters: dict, player, speak) -> str:
+    count = int(parameters.get("count", 1))
+    language = parameters.get("language", "tr")
+    auto_upload = bool(parameters.get("auto_upload", False))
+    
+    try:
+        from integrations.yt_video_generator import get_yt_generator
+        yt = get_yt_generator(ui_logger=player.write_log if player else None)
+        if yt.is_running:
+            return "Efendim, zaten bir video üretimi arka planda devam ediyor."
+        
+        # Start generation in background
+        yt.generate_in_background(count=count, language=language, auto_upload=auto_upload)
+        
+        upload_msg = " ve YouTube'a yüklenecek" if auto_upload else ""
+        msg = f"Efendim, arka planda {count} video üretimi başlatıldı{upload_msg}. Tamamlandığında sizi bilgilendireceğim."
+        if speak:
+            speak(msg)
+        return msg
+    except Exception as e:
+        return f"Video üretimi başlatılamadı efendim: {e}"
+
+
+def _handle_status(parameters: dict, player, speak) -> str:
+    try:
+        from integrations.yt_video_generator import get_yt_generator
+        yt = get_yt_generator()
+        status = yt.get_status()
+        
+        status_msg = (
+            f"Efendim, YouTube Motoru Durumu:\n"
+            f"  Çalışıyor mu: {'Evet' if status['running'] else 'Hayır'}\n"
+            f"  Toplam Video Sayısı: {status['total_videos']}\n"
+            f"  Groq API Durumu: {'Aktif' if status['groq_key_set'] else 'Yapılandırılmamış'}"
+        )
+        if speak:
+            speak(status_msg)
+        return status_msg
+    except Exception as e:
+        return f"Durum bilgisi alınamadı efendim: {e}"
+
+
 _ACTION_MAP = {
     "play":      _handle_play,
     "summarize": _handle_summarize,
     "get_info":  _handle_get_info,
     "trending":  _handle_trending,
+    "generate":  _handle_generate,
+    "status":    _handle_status,
 }
 
 
@@ -406,7 +450,7 @@ def youtube_video(
     if handler is None:
         return (
             f"Unknown YouTube action: '{action}'. "
-            "Available: play, summarize, get_info, trending."
+            "Available: play, summarize, get_info, trending, generate, status."
         )
 
     try:
