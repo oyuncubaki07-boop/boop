@@ -1,23 +1,27 @@
 import json
 import re
+import asyncio
 from datetime import datetime
 from threading import Lock
 from pathlib import Path
 import sys
-
+import os
 
 def get_base_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
     return Path(__file__).resolve().parent.parent
 
-
 BASE_DIR         = get_base_dir()
-MEMORY_PATH      = BASE_DIR / "memory" / "long_term.json"
+
+PERSIST_DIR = os.getenv("JARVIS_PERSISTENT_DIR", "")
+if PERSIST_DIR:
+    MEMORY_PATH = Path(os.path.join(PERSIST_DIR, "long_term.json"))
+else:
+    MEMORY_PATH = BASE_DIR / "memory" / "long_term.json"
 _lock            = Lock()
 MAX_VALUE_LENGTH = 380
 MEMORY_MAX_CHARS = 2200
-
 
 def _empty_memory() -> dict:
     return {
@@ -28,7 +32,6 @@ def _empty_memory() -> dict:
         "wishes":        {},
         "notes":         {}
     }
-
 
 def load_memory() -> dict:
     if not MEMORY_PATH.exists():
@@ -48,6 +51,8 @@ def load_memory() -> dict:
             print(f"[Memory] ⚠️ Load error: {e}")
             return _empty_memory()
 
+async def load_memory_async() -> dict:
+    return await asyncio.to_thread(load_memory)
 
 def _all_entries(memory: dict) -> list[tuple]:
     entries = []
@@ -59,30 +64,41 @@ def _all_entries(memory: dict) -> list[tuple]:
                 entries.append((cat, key, entry))
     return entries
 
-
 def _trim_to_limit(memory: dict) -> dict:
     serialized = json.dumps(memory, ensure_ascii=False)
     if len(serialized) <= MEMORY_MAX_CHARS:
         return memory
 
     entries = _all_entries(memory)
+    # Sort oldest first — these get deleted first
     entries.sort(key=lambda t: t[2].get("updated", "0000-00-00"))
 
-    for cat, key, _ in entries:
-        if len(json.dumps(memory, ensure_ascii=False)) <= MEMORY_MAX_CHARS:
+    # Calculate total excess, then delete entries until we're under limit
+    excess = len(serialized) - MEMORY_MAX_CHARS
+    removed = 0
+    to_delete = []
+    for cat, key, val in entries:
+        if removed >= excess:
             break
-        del memory[cat][key]
-        print(f"[Memory] 🗑️  Trimmed {cat}/{key} (limit: {MEMORY_MAX_CHARS} chars)")
+        entry_size = len(json.dumps({key: val}, ensure_ascii=False)) + 10  # overhead
+        to_delete.append((cat, key))
+        removed += entry_size
+
+    for cat, key in to_delete:
+        if cat in memory and key in memory[cat]:
+            del memory[cat][key]
+            print(f"[Memory] 🗑️  Trimmed {cat}/{key} (limit: {MEMORY_MAX_CHARS} chars)")
+        # Clean up empty categories
+        if cat in memory and not memory[cat]:
+            del memory[cat]
 
     return memory
-
 
 def save_memory(memory: dict) -> None:
     if not isinstance(memory, dict):
         return
 
     memory = _trim_to_limit(memory)
-
     MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
     with _lock:
         MEMORY_PATH.write_text(
@@ -90,12 +106,13 @@ def save_memory(memory: dict) -> None:
             encoding="utf-8"
         )
 
+async def save_memory_async(memory: dict) -> None:
+    await asyncio.to_thread(save_memory, memory)
 
 def _truncate_value(val: str) -> str:
     if isinstance(val, str) and len(val) > MAX_VALUE_LENGTH:
         return val[:MAX_VALUE_LENGTH].rstrip() + "…"
     return val
-
 
 def _recursive_update(target: dict, updates: dict) -> bool:
     changed = False
@@ -125,7 +142,6 @@ def _recursive_update(target: dict, updates: dict) -> bool:
 
     return changed
 
-
 def update_memory(memory_update: dict) -> dict:
     if not isinstance(memory_update, dict) or not memory_update:
         return load_memory()
@@ -136,13 +152,21 @@ def update_memory(memory_update: dict) -> dict:
         print(f"[Memory] 💾 Saved: {list(memory_update.keys())}")
     return memory
 
+async def update_memory_async(memory_update: dict) -> dict:
+    if not isinstance(memory_update, dict) or not memory_update:
+        return await load_memory_async()
+
+    memory = await load_memory_async()
+    if _recursive_update(memory, memory_update):
+        await save_memory_async(memory)
+        print(f"[Memory] 💾 Saved: {list(memory_update.keys())}")
+    return memory
 
 def should_extract_memory(user_text: str, jarvis_text: str, api_key: str = "") -> bool:
     try:
-        from or_client import client
+        from core.services.or_client import client
 
         combined = f"User: {user_text[:300]}\nJarvis: {jarvis_text[:1000]}"
-
         result = client.chat(
             f"Does this conversation contain ANY of the following?\n"
             f"- Personal facts (name, age, city, job, birthday, nationality)\n"
@@ -157,18 +181,18 @@ def should_extract_memory(user_text: str, jarvis_text: str, api_key: str = "") -
             temperature=0.0,
         )
         return "YES" in result.upper()
-
     except Exception as e:
         print(f"[Memory] ⚠️ Stage1 check failed: {e}")
         return False
 
+async def should_extract_memory_async(user_text: str, jarvis_text: str, api_key: str = "") -> bool:
+    return await asyncio.to_thread(should_extract_memory, user_text, jarvis_text, api_key)
 
 def extract_memory(user_text: str, jarvis_text: str, api_key: str = "") -> dict:
     try:
-        from or_client import client
+        from core.services.or_client import client
 
         combined = f"User: {user_text[:600]}\nJarvis: {jarvis_text[:300]}"
-
         raw = client.chat(
             f"Extract ALL memorable personal facts from this conversation. Any language.\n"
             f"Return ONLY valid JSON. Use {{}} if truly nothing is worth saving.\n\n"
@@ -209,7 +233,6 @@ def extract_memory(user_text: str, jarvis_text: str, api_key: str = "") -> dict:
             return {}
 
         return json.loads(clean)
-
     except json.JSONDecodeError:
         return {}
     except Exception as e:
@@ -217,13 +240,14 @@ def extract_memory(user_text: str, jarvis_text: str, api_key: str = "") -> dict:
             print(f"[Memory] ⚠️ Extract failed: {e}")
         return {}
 
+async def extract_memory_async(user_text: str, jarvis_text: str, api_key: str = "") -> dict:
+    return await asyncio.to_thread(extract_memory, user_text, jarvis_text, api_key)
 
 def format_memory_for_prompt(memory: dict | None) -> str:
     if not memory:
         return ""
 
     lines = []
-
     identity  = memory.get("identity", {})
     id_fields = ["name", "age", "birthday", "city", "job", "language", "school", "nationality"]
     for field in id_fields:
@@ -294,14 +318,12 @@ def format_memory_for_prompt(memory: dict | None) -> str:
 
     return result + "\n"
 
-
 def remember(key: str, value: str, category: str = "notes") -> str:
     valid = {"identity", "preferences", "projects", "relationships", "wishes", "notes"}
     if category not in valid:
         category = "notes"
     update_memory({category: {key: {"value": value}}})
     return f"Remembered: {category}/{key} = {value}"
-
 
 def forget(key: str, category: str = "notes") -> str:
     memory = load_memory()

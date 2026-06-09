@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: jarvis-web-admin
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn web.server:app --host 0.0.0.0 --port 10000
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.10.13"
+      - key: JARVIS_PERSISTENT_DIR
+        value: /opt/render/project/src/memory_persistent
+    disk:
+      name: jarvis-memory-disk
+      mountPath: /opt/render/project/src/memory_persistent
+      sizeGB: 1
