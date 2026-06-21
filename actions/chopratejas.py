@@ -1,132 +1,137 @@
 import zlib
-import sys
+import base64
+import sys # Hata detaylarını loglamak için
 
 def run_action(parameters: dict) -> dict:
     """
-    Jarvis için metin verilerini (örneğin, araç çıktıları, loglar, RAG parçacıkları)
-    LLM'ye gönderilmeden önce ZLIB kullanarak güvenli ve verimli bir şekilde sıkıştıran yetenek.
-
-    Amacı, token/veri boyutunu azaltarak LLM maliyetlerini ve işlem süresini optimize etmektir.
-    Bu, 'sponsors/chopratejas' ilhamıyla, %60-95 daha az token ile aynı yanıtları elde etme hedefiyle yapılmıştır.
-
-    DNA:
-    - Ton: Saygılı, sıcak, kısa ve net.
-    - Mimari: Modüler, genişletilebilir, güvenlik odaklı, hata toleranslı.
-    - Kod Standartları: 'def run_action(parameters)' giriş noktası, Türkçe mesajlar 'Efendim' ile,
-                       try/except ile güvenli hata yönetimi, harici API anahtarı yok.
-    - Güvenlik: Yalnızca yerel sıkıştırma yapar, tehlikeli komut çalıştırmaz.
+    Efendim, LLM'e gönderilecek büyük metin verilerini zlib ile sıkıştırır
+    ve Base64 formatına dönüştürür. Bu sayede token tüketimi optimize edilir.
 
     Parametreler:
-    - parameters (dict): Eylemin gerektirdiği girdileri içeren bir sözlük.
-        - "data" (str): Sıkıştırılacak metin verisi. Zorunludur.
-                        Örnek: "Bu, LLM'ye gönderilecek uzun bir araç çıktısı metnidir."
+    - parameters (dict):
+        - 'data' (str): Sıkıştırılacak ham metin verisi. Zorunludur.
 
     Dönüş:
-    - dict: İşlemin sonucunu ve sıkıştırılmış veriyi içeren bir sözlük.
-        - "status" (str): İşlemin durumu ("success" veya "error").
-        - "message" (str): Kullanıcıya yönelik açıklayıcı mesaj.
-        - "compressed_data_hex" (str, isteğe bağlı): Sıkıştırılmış verinin hexadecimal string temsili.
-                                                   (Yalnızca "success" durumunda).
-                                                   Bu format, bayt verisini JSON uyumlu bir string olarak taşır.
-        - "original_size" (int, isteğe bağlı): Orijinal verinin UTF-8 bayt cinsinden boyutu.
-        - "compressed_size" (int, isteğe bağlı): Sıkıştırılmış verinin bayt cinsinden boyutu.
-        - "compression_ratio" (float, isteğe bağlı): Elde edilen sıkıştırma oranı (yüzde).
-        - "error_details" (str, isteğe bağlı): Hata durumunda teknik detaylar.
+    - dict: Sıkıştırma işleminin sonucunu içeren bir sözlük.
+            Başarılı durumda sıkıştırılmış veriyi ve istatistikleri,
+            hata durumunda ise hata mesajını içerir.
     """
     try:
-        # 1. Parametre Doğrulama (DNA: Güvenlik önce)
-        if "data" not in parameters or not isinstance(parameters["data"], str):
+        data_to_compress = parameters.get('data')
+
+        # Güvenlik ve veri doğrulama
+        if not isinstance(data_to_compress, str) or not data_to_compress:
             return {
                 "status": "error",
-                "message": "Efendim, 'data' parametresi eksik veya uygun formatta değil. Lütfen sıkıştırılacak metni sağlayınız.",
-                "error_details": "Missing or invalid 'data' parameter. Expected a string."
+                "message": "Efendim, lütfen 'data' anahtarı altında sıkıştırılacak geçerli bir metin (string) sağlayın.",
+                "error_details": "Giriş verisi eksik, boş veya geçersiz türde."
             }
 
-        input_data = parameters["data"]
+        original_bytes = data_to_compress.encode('utf-8')
+        original_char_count = len(data_to_compress) # LLM token'ları genellikle karakter sayısıyla ilişkilidir
 
-        # 2. Veriyi UTF-8 olarak kodlayıp ZLIB ile sıkıştır
-        # DNA: Yerel veri gizliliği - işlem yerel olarak yapılır.
-        original_bytes = input_data.encode('utf-8')
+        # Veriyi zlib ile sıkıştır
         compressed_bytes = zlib.compress(original_bytes)
 
-        # 3. Boyut ve sıkıştırma oranı hesaplama
-        original_size = len(original_bytes)
-        compressed_size = len(compressed_bytes)
-        compression_ratio = (1 - (compressed_size / original_size)) * 100 if original_size > 0 else 0
+        # Sıkıştırılmış bayt verisini Base64 ile kodla (LLM'e metin olarak iletilebilmesi için)
+        encoded_compressed_data_b64 = base64.b64encode(compressed_bytes).decode('utf-8')
+        compressed_b64_char_count = len(encoded_compressed_data_b64) # LLM'e gidecek metin boyutu
 
-        # 4. Sonucu döndürme (DNA: Kıs ve net mesajlar, 'Efendim' ile)
+        # Sıkıştırma kazanç oranını hesapla
+        compression_saving_percentage = 0.0
+        if original_char_count > 0:
+            compression_saving_percentage = (1 - (compressed_b64_char_count / original_char_count)) * 100
+
         return {
             "status": "success",
-            "message": f"Efendim, veri başarıyla sıkıştırıldı. Orijinal boyut: {original_size} bayt, Sıkıştırılmış boyut: {compressed_size} bayt. Yaklaşık %{compression_ratio:.2f} oranında azalma sağlandı.",
-            "compressed_data_hex": compressed_bytes.hex(), # Bayt verisini güvenli string olarak iletmek için hex kullanıldı
-            "original_size": original_size,
-            "compressed_size": compressed_size,
-            "compression_ratio": round(compression_ratio, 2)
+            "message": "Efendim, veri başarıyla sıkıştırıldı. Token tüketiminde %{:.2f} tasarruf sağlandı.".format(compression_saving_percentage),
+            "original_data_char_count": original_char_count,
+            "original_data_byte_count": len(original_bytes),
+            "compressed_data_b64_char_count": compressed_b64_char_count,
+            "compressed_data_raw_byte_count": len(compressed_bytes),
+            "compression_saving_percentage": round(compression_saving_percentage, 2),
+            "compressed_data_b64": encoded_compressed_data_b64 # LLM'e gönderilecek Base64 kodlu sıkıştırılmış veri
         }
 
     except Exception as e:
-        # 5. Güvenli Hata İşleme (DNA: try/except ile güvenli hata, 'Efendim' ile mesaj)
+        # Güvenli hata işleme: Detayları konsola yaz, kullanıcıya genel bir hata mesajı dön.
+        error_traceback = traceback.format_exc()
+        print(f"JARVIS/compress_for_llm Hata: {error_traceback}", file=sys.stderr) # Hata detaylarını stderr'e yaz
+
         return {
             "status": "error",
-            "message": f"Efendim, veri sıkıştırılırken beklenmedik bir sorun oluştu: {str(e)}. Lütfen verilerinizi kontrol ediniz.",
+            "message": "Efendim, veri sıkıştırılırken beklenmeyen bir hata oluştu.",
+            "error_details": str(e) # Geliştirici için hata mesajı
+        }
+
+# Geri dönüştürme fonksiyonu (JARVIS'in dahili kullanımı veya ayrı bir yetenek olarak)
+def decompress_b64_data(compressed_data_b64: str) -> dict:
+    """
+    Efendim, Base64 kodlu zlib sıkıştırılmış veriyi orijinal haline geri dönüştürür.
+
+    Parametreler:
+    - compressed_data_b64 (str): Base64 kodlu sıkıştırılmış metin verisi. Zorunludur.
+
+    Dönüş:
+    - dict: Açma işleminin sonucunu içeren bir sözlük.
+    """
+    try:
+        if not isinstance(compressed_data_b64, str) or not compressed_data_b64:
+            return {
+                "status": "error",
+                "message": "Efendim, lütfen 'compressed_data_b64' anahtarı altında geçerli bir Base64 kodlu sıkıştırılmış metin sağlayın.",
+                "error_details": "Giriş verisi eksik, boş veya geçersiz türde."
+            }
+
+        # Base64 çözme
+        decoded_compressed_bytes = base64.b64decode(compressed_data_b64)
+
+        # zlib ile açma
+        decompressed_bytes = zlib.decompress(decoded_compressed_bytes)
+
+        # Metne dönüştürme
+        decompressed_text = decompressed_bytes.decode('utf-8')
+
+        return {
+            "status": "success",
+            "message": "Efendim, veri başarıyla açıldı.",
+            "decompressed_text": decompressed_text,
+            "original_b64_char_count": len(compressed_data_b64),
+            "decompressed_char_count": len(decompressed_text)
+        }
+
+    except Exception as e:
+        error_traceback = traceback.format_exc()
+        print(f"JARVIS/decompress_b64_data Hata: {error_traceback}", file=sys.stderr)
+
+        return {
+            "status": "error",
+            "message": "Efendim, veriyi açarken beklenmeyen bir hata oluştu.",
             "error_details": str(e)
         }
 
-# Örnek Kullanım:
-if __name__ == "__main__":
-    test_data_long = """
-    Jarvis, Tony Stark tarafından tasarlanmış bir yapay zeka sistemidir. Zengin veri analizi yetenekleri,
-    stratejik planlama becerileri ve kullanıcı etkileşimi için gelişmiş bir doğal dil işleme arayüzü ile donatılmıştır.
-    Modüler bir mimariye sahip olan Jarvis, yeni yetenekler eklendikçe dinamik olarak genişleyebilir ve evrim geçirebilir.
-    Güvenlik, Jarvis'in temel tasarım ilkelerinden biridir; kritik değişiklikler kullanıcı onayı gerektirir,
-    hassas veriler yerel olarak işlenir ve sandbox ortamları dışında rastgele kod çalıştırılmasına izin verilmez.
-    Bu tasarım, Jarvis'i sadece güçlü değil, aynı zamanda güvenilir ve öngörülebilir kılar.
-    Jarvis'in asenkron ve hata toleranslı yapısı, operasyonel sürekliliği ve dayanıklılığı garanti eder.
-    """ * 10 # Metni biraz uzatalım
+# **Örnek Kullanım (Jarvis'in iç simülasyonu için):**
+if __name__ == '__main__':
+    long_text = "JARVIS, Tony Stark'ın yapay zeka asistanıdır. Çoklu görev yetenekleri, gelişmiş analitik becerileri ve kullanıcı dostu arayüzü ile bilinir. Bu metin, sıkıştırma yeteneğinin ne kadar etkili olduğunu test etmek amacıyla tekrar eden ifadeler içermektedir. JARVIS DNA'sı modülerlik, güvenlik ve hata toleransını önceliklendirir. Her yeni yetenek bu prensiplere uygun olmalıdır. Bu metin oldukça uzun ve tekrar eden kısımlara sahip olduğundan, zlib sıkıştırması için iyi bir adaydır. LLM'lere gönderilmeden önce bu tür metinleri sıkıştırmak, hem maliyetleri düşürür hem de performans artışı sağlar. Tony Stark'ın JARVIS'i her zaman en verimli çözümleri sunar. JARVIS, her zaman yanınızda. JARVIS, geleceğin teknolojisi. JARVIS, sizin için burada. JARVIS, daima en iyisi. JARVIS, Tony Stark'ın en iyi arkadaşı. JARVIS, eşsiz bir yapay zeka. JARVIS, inanılmaz bir sistem. JARVIS, her zaman hazır. JARVIS, en iyi asistan." * 10 # Metni uzat
 
-    test_data_short = "Merhaba Dünya!"
+    print("--- Sıkıştırma Testi ---")
+    compression_result = run_action({'data': long_text})
+    print(f"Sıkıştırma Sonucu: {compression_result}")
 
-    test_data_empty = ""
+    if compression_result['status'] == 'success':
+        print("\n--- Geri Dönüştürme Testi ---")
+        decompression_result = decompress_b64_data(compression_result['compressed_data_b64'])
+        print(f"Geri Dönüştürme Sonucu: {decompression_result}")
+        print(f"Orijinal metin ile geri dönüştürülen metin aynı mı? {long_text == decompression_result.get('decompressed_text')}")
+    else:
+        print("Sıkıştırma başarısız olduğu için geri dönüştürme testi atlandı.")
 
-    test_data_invalid = {"not_data": "bu yanlış"}
+    print("\n--- Hata Testi (Geçersiz Giriş) ---")
+    error_result = run_action({'data': 12345}) # String olmayan veri
+    print(f"Hata Sonucu: {error_result}")
 
+    error_result_empty = run_action({'data': ''}) # Boş veri
+    print(f"Hata Sonucu (Boş): {error_result_empty}")
 
-    print("--- Uzun Metin Testi ---")
-    result_long = run_action({"data": test_data_long})
-    print(f"Status: {result_long['status']}")
-    print(f"Message: {result_long['message']}")
-    if result_long['status'] == 'success':
-        print(f"Orijinal boyut: {result_long['original_size']} bayt")
-        print(f"Sıkıştırılmış boyut: {result_long['compressed_size']} bayt")
-        print(f"Sıkıştırma Oranı: %{result_long['compression_ratio']:.2f}")
-        # Sıkıştırılmış veriyi geri çözme örneği (Jarvis içinde LLM'ye iletilmeden önce gerekebilir)
-        # decompressed_bytes = bytes.fromhex(result_long['compressed_data_hex'])
-        # original_text_again = zlib.decompress(decompressed_bytes).decode('utf-8')
-        # print(f"Decompress sonrası ilk 100 karakter: {original_text_again[:100]}...")
-    print("\n")
-
-    print("--- Kısa Metin Testi ---")
-    result_short = run_action({"data": test_data_short})
-    print(f"Status: {result_short['status']}")
-    print(f"Message: {result_short['message']}")
-    print("\n")
-
-    print("--- Boş Metin Testi ---")
-    result_empty = run_action({"data": test_data_empty})
-    print(f"Status: {result_empty['status']}")
-    print(f"Message: {result_empty['message']}")
-    print("\n")
-
-    print("--- Geçersiz Parametre Testi ---")
-    result_invalid = run_action(test_data_invalid)
-    print(f"Status: {result_invalid['status']}")
-    print(f"Message: {result_invalid['message']}")
-    print(f"Error Details: {result_invalid['error_details']}")
-    print("\n")
-
-    print("--- Eksik Parametre Testi ---")
-    result_missing = run_action({})
-    print(f"Status: {result_missing['status']}")
-    print(f"Message: {result_missing['message']}")
-    print(f"Error Details: {result_missing['error_details']}")
-    print("\n")
+    error_result_missing = run_action({}) # 'data' eksik
+    print(f"Hata Sonucu (Eksik): {error_result_missing}")

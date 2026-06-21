@@ -116,22 +116,26 @@ def web_search(
         player.write_log(f"[Search] {query or ', '.join(items)}")
 
     print(f"[WebSearch] 🔍 Query: {query!r}  Mode: {mode}")
-# replace: result = _gemini_search(query) block with:
+
     try:
-        from or_client import client
-        result = client.chat(
-            query,
-            system="You are a web search assistant. Answer factually and concisely."
-        )
-        print("[WebSearch] ✅ OpenRouter OK.")
-        return result
-    except Exception as e:
-        print(f"[WebSearch] ⚠️ OpenRouter failed ({e}) — trying DDG...")
-        results = _ddg_search(query)
-        result  = _format_ddg(query, results)
-        print(f"[WebSearch] ✅ DDG: {len(results)} result(s).")
-        return result
-    
+        if mode == "compare" and items:
+            print(f"[WebSearch] 📊 Comparing: {items}")
+            result = _compare(items, aspect)
+            print("[WebSearch] ✅ Compare done.")
+            return result
+
+        print("[WebSearch] 🌐 Trying Gemini...")
+        try:
+            result = _gemini_search(query)
+            print("[WebSearch] ✅ Gemini OK.")
+            return result
+        except Exception as e:
+            print(f"[WebSearch] ⚠️ Gemini failed ({e}) — trying DDG...")
+            results = _ddg_search(query)
+            result  = _format_ddg(query, results)
+            print(f"[WebSearch] ✅ DDG: {len(results)} result(s).")
+            return result
+
     except Exception as e:
         print(f"[WebSearch] ❌ All backends failed: {e}")
         return f"Search failed, sir: {e}"

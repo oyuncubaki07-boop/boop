@@ -9,8 +9,17 @@ from pathlib import Path
 from datetime import datetime
 from urllib.parse import quote_plus
 
-import pyautogui
-import numpy as np
+try:
+    import pyautogui
+    _PYAUTOGUI = True
+except ImportError:
+    _PYAUTOGUI = False
+
+try:
+    import numpy as np
+    _NUMPY = True
+except ImportError:
+    _NUMPY = False
 
 try:
     import requests
@@ -46,6 +55,12 @@ HEADERS = {
 }
 
 _YT_VIDEO_FILTER = "EgIQAQ%3D%3D"
+
+
+def _get_api_key() -> str:
+    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)["gemini_api_key"]
+
 
 def _open_url(url: str) -> None:
     try:
@@ -152,22 +167,26 @@ def _get_transcript(video_id: str) -> str | None:
 
 
 def _summarize_with_gemini(transcript: str, video_url: str) -> str:
-    from or_client import client
+    from google import genai as _genai
+    from google.genai import types
 
+    _client = _genai.Client(api_key=_get_api_key())
     max_chars = 80000
     truncated = transcript[:max_chars] + ("..." if len(transcript) > max_chars else "")
-
-    return client.chat(
-        f"Please summarize this YouTube video transcript:\n\n{truncated}",
-        system=(
-            "You are JARVIS, an AI assistant. "
-            "Summarize YouTube video transcripts clearly and concisely. "
-            "Structure: 1-sentence overview, then 3-5 key points. "
-            "Be direct. Address the user as 'sir'. "
-            "Match the language of the transcript."
-        ),
-        max_tokens=2048,
+    response  = _client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=f"Please summarize this YouTube video transcript:\n\n{truncated}",
+        config=types.GenerateContentConfig(
+            system_instruction=(
+                "You are JARVIS, an AI assistant. "
+                "Summarize YouTube video transcripts clearly and concisely. "
+                "Structure: 1-sentence overview, then 3-5 key points. "
+                "Be direct. Address the user as 'sir'. "
+                "Match the language of the transcript."
+            )
+        )
     )
+    return response.text.strip()
 
 
 def _save_summary(content: str, video_url: str) -> str:
@@ -380,55 +399,11 @@ def _handle_trending(parameters: dict, player, speak) -> str:
 
     return result
 
-def _handle_generate(parameters: dict, player, speak) -> str:
-    count = int(parameters.get("count", 1))
-    language = parameters.get("language", "tr")
-    auto_upload = bool(parameters.get("auto_upload", False))
-    
-    try:
-        from integrations.yt_video_generator import get_yt_generator
-        yt = get_yt_generator(ui_logger=player.write_log if player else None)
-        if yt.is_running:
-            return "Efendim, zaten bir video üretimi arka planda devam ediyor."
-        
-        # Start generation in background
-        yt.generate_in_background(count=count, language=language, auto_upload=auto_upload)
-        
-        upload_msg = " ve YouTube'a yüklenecek" if auto_upload else ""
-        msg = f"Efendim, arka planda {count} video üretimi başlatıldı{upload_msg}. Tamamlandığında sizi bilgilendireceğim."
-        if speak:
-            speak(msg)
-        return msg
-    except Exception as e:
-        return f"Video üretimi başlatılamadı efendim: {e}"
-
-
-def _handle_status(parameters: dict, player, speak) -> str:
-    try:
-        from integrations.yt_video_generator import get_yt_generator
-        yt = get_yt_generator()
-        status = yt.get_status()
-        
-        status_msg = (
-            f"Efendim, YouTube Motoru Durumu:\n"
-            f"  Çalışıyor mu: {'Evet' if status['running'] else 'Hayır'}\n"
-            f"  Toplam Video Sayısı: {status['total_videos']}\n"
-            f"  Groq API Durumu: {'Aktif' if status['groq_key_set'] else 'Yapılandırılmamış'}"
-        )
-        if speak:
-            speak(status_msg)
-        return status_msg
-    except Exception as e:
-        return f"Durum bilgisi alınamadı efendim: {e}"
-
-
 _ACTION_MAP = {
     "play":      _handle_play,
     "summarize": _handle_summarize,
     "get_info":  _handle_get_info,
     "trending":  _handle_trending,
-    "generate":  _handle_generate,
-    "status":    _handle_status,
 }
 
 
@@ -450,7 +425,7 @@ def youtube_video(
     if handler is None:
         return (
             f"Unknown YouTube action: '{action}'. "
-            "Available: play, summarize, get_info, trending, generate, status."
+            "Available: play, summarize, get_info, trending."
         )
 
     try:

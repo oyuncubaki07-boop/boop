@@ -1,6 +1,7 @@
 #computer_control.py
 import io
 import json
+import platform
 import re
 import string
 import subprocess
@@ -39,8 +40,17 @@ def _load_config() -> dict:
     except Exception:
         return {}
 
+def _platform_os() -> str:
+    return {"Windows": "windows", "Darwin": "mac", "Linux": "linux"}.get(
+        platform.system(), "linux"
+    )
+
 def _get_os() -> str:
-    return _load_config().get("os_system", "windows").lower()
+    return _load_config().get("os_system", _platform_os()).lower()
+
+
+def _get_api_key() -> str:
+    return _load_config().get("gemini_api_key", "")
 
 _SAFE_SCREENSHOT_ROOTS = (
     Path.home(),
@@ -155,7 +165,8 @@ def _smart_type(text: str, clear_first: bool = True) -> str:
     if len(text) > 20 and _PYPERCLIP:
         pyperclip.copy(text)
         time.sleep(0.1)
-        pyautogui.hotkey("ctrl", "v")
+        paste_key = "command" if _get_os() == "mac" else "ctrl"
+        pyautogui.hotkey(paste_key, "v")
         return f"Smart-typed (clipboard): {text[:60]}{'…' if len(text) > 60 else ''}"
 
     pyautogui.typewrite(text, interval=0.04)
@@ -217,7 +228,8 @@ def _clipboard_paste(text: str) -> str:
         pyperclip.copy(text)
         time.sleep(0.1)
         _require_pyautogui()
-        pyautogui.hotkey("ctrl", "v")
+        paste_key = "command" if _get_os() == "mac" else "ctrl"
+        pyautogui.hotkey(paste_key, "v")
         return f"Pasted: {text[:60]}{'…' if len(text) > 60 else ''}"
     return "pyperclip not available"
 
@@ -232,7 +244,8 @@ def _screenshot(save_path: str | None = None) -> str:
 
 def _clear_field() -> str:
     _require_pyautogui()
-    pyautogui.hotkey("ctrl", "a")
+    select_key = "command" if _get_os() == "mac" else "ctrl"
+    pyautogui.hotkey(select_key, "a")
     time.sleep(0.1)
     pyautogui.press("delete")
     return "Field cleared"
@@ -291,33 +304,51 @@ def _focus_window(title: str) -> str:
             return f"focus_window (Linux) failed: {e}"
 
     return f"focus_window: unknown OS '{os_name}'"
+
 def _screen_find(description: str) -> tuple[int, int] | None:
+    api_key = _get_api_key()
+    if not api_key:
+        print("[ComputerControl] ⚠️ No API key for screen_find")
+        return None
+
     try:
-        import base64
-        from or_client import client
+        from google import genai
+        from google.genai import types as gtypes
 
         _require_pyautogui()
         w, h  = pyautogui.size()
         img   = pyautogui.screenshot()
         buf   = io.BytesIO()
         img.save(buf, format="PNG")
-        b64 = base64.b64encode(buf.getvalue()).decode()
+        image_bytes = buf.getvalue()
 
-        text = client.vision(
+        client = genai.Client(api_key=api_key)
+        prompt = (
             f"This is a screenshot of a {w}×{h} pixel screen. "
-            f"Locate the UI element: '{description}'. "
-            f"Reply ONLY with center coordinates as: x,y — or NOT_FOUND",
-            image_b64=b64,
-            mime="image/png",
+            f"Locate the UI element described as: '{description}'. "
+            f"Reply with ONLY the center coordinates as: x,y "
+            f"If the element is not visible, reply: NOT_FOUND"
         )
 
+        response = client.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=[
+                gtypes.Part.from_bytes(data=image_bytes, mime_type="image/png"),
+                prompt,
+            ],
+        )
+
+        text = (response.text or "").strip()
         if "NOT_FOUND" in text.upper():
             return None
+
         match = re.search(r"(\d+)\s*,\s*(\d+)", text)
         if match:
             return int(match.group(1)), int(match.group(2))
+
     except Exception as e:
         print(f"[ComputerControl] ⚠️ screen_find failed: {e}")
+
     return None
 
 def computer_control(

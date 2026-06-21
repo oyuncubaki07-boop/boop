@@ -1,0 +1,8 @@
+{
+    "name": "last30days_skill",
+    "description": "Infinity evrim: mvanhorn/last30days-skill",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}

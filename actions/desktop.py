@@ -23,6 +23,11 @@ def _get_base_dir() -> Path:
         return Path(sys.executable).parent
     return Path(__file__).resolve().parent.parent
 
+def _get_api_key() -> str:
+    path = _get_base_dir() / "config" / "api_keys.json"
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)["gemini_api_key"]
+    
 def _get_desktop() -> Path:
     if _OS == "Linux":
         xdg = os.environ.get("XDG_DESKTOP_DIR", "")
@@ -95,19 +100,26 @@ def _execute_generated_code(code: str, player=None) -> str:
         print(f"[Desktop] Exec error: {e}\nCode:\n{code[:300]}")
         return f"Execution error: {e}"
 
+
 def _ask_gemini_for_desktop_action(task: str) -> str:
-    from or_client import client
+
+    from google import genai as _genai
+    _client = _genai.Client(api_key=_get_api_key())
 
     desktop = str(_get_desktop())
-    os_specific = {
-        "Windows": "- ctypes (Windows API calls, read-only)\n- winreg (registry READ only)",
-        "Darwin":  "- subprocess is NOT available; use pyautogui or Path only",
-        "Linux":   "- subprocess is NOT available; use pyautogui or Path only",
-    }.get(_OS, "")
+
+    os_specific = ""
+    if _OS == "Windows":
+        os_specific = "- ctypes (Windows API calls, read-only)\n- winreg (registry READ only)"
+    elif _OS == "Darwin":
+        os_specific = "- subprocess is NOT available; use pyautogui or Path only"
+    else:
+        os_specific = "- subprocess is NOT available; use pyautogui or Path only"
 
     prompt = f"""You are a desktop automation assistant.
 Current OS: {_OS}
 Desktop path: {desktop}
+
 Generate safe Python code to accomplish the task below.
 Allowed modules ONLY:
 - pyautogui (mouse, keyboard — if needed)
@@ -116,18 +128,29 @@ Allowed modules ONLY:
 - os_path (os.path equivalent, read-only)
 - time.sleep
 {os_specific}
+
 Hard rules:
-- NO file deletion, NO subprocess, NO exec/eval inside the code
-- NO import statements, NO file write except explicitly requested
+- NO file deletion (no unlink, no rmtree, no remove)
+- NO subprocess calls
+- NO exec() or eval() inside the code
+- NO import statements (modules are pre-injected)
+- NO file write operations except explicitly requested
 - If task cannot be done safely with these tools, output exactly: UNSAFE
+
 Output ONLY the Python code. No explanation, no markdown, no backticks.
+
 Task: {task}"""
 
     try:
-        return client.chat(prompt, system="You are a code generator. Output only raw Python code.")
+        response = _client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+        code = response.text.strip()
+        if code.startswith("```"):
+            lines = code.split("\n")
+            code  = "\n".join(lines[1:-1]).strip()
+        return code
     except Exception as e:
         return f"ERROR: {e}"
-        
+
 def set_wallpaper(image_path: str) -> str:
     path = Path(image_path).expanduser().resolve()
     if not path.exists():

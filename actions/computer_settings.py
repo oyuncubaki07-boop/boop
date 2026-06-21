@@ -29,6 +29,11 @@ def _get_base_dir() -> Path:
         return Path(sys.executable).parent
     return Path(__file__).resolve().parent.parent
 
+def _get_api_key() -> str:
+    path = _get_base_dir() / "config" / "api_keys.json"
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)["gemini_api_key"]
+
 def _get_macos_wifi_interface() -> str:
     try:
         result = subprocess.run(
@@ -239,12 +244,6 @@ def focus_search():
     else:               pyautogui.hotkey("ctrl", "l")
 
 def pause_video():      pyautogui.press("space")
-
-def play_pause():       pyautogui.press("playpause")
-
-def next_track():       pyautogui.press("nexttrack")
-
-def prev_track():       pyautogui.press("prevtrack")
 
 def refresh_page():
     if _OS == "Darwin": pyautogui.hotkey("command", "r")
@@ -514,20 +513,7 @@ ACTION_MAP: dict[str, callable] = {
     "sleep_display":       sleep_display,
     "screen_off":          sleep_display,
     "pause_video":         pause_video,
-    "play_pause":          play_pause,
-    "pause":               play_pause,
-    "play":                play_pause,
-    "stop":                play_pause,
-    "durdur":              play_pause,
-    "duraklat":            play_pause,
-    "oynat":               play_pause,
-    "next_track":          next_track,
-    "prev_track":          prev_track,
-    "next":                next_track,
-    "prev":                prev_track,
-    "sonraki":             next_track,
-    "onceki":              prev_track,
-    "önceki":              prev_track,
+    "play_pause":          pause_video,
     "close_app":           close_app,
     "close_window":        close_window,
     "full_screen":         full_screen,
@@ -581,30 +567,41 @@ ACTION_MAP: dict[str, callable] = {
 _DANGEROUS_ACTIONS = {"restart", "shutdown"}
 
 
+
 def _detect_action(description: str) -> dict:
-    from or_client import client
+
+    from google import genai as _genai
+    _client = _genai.Client(api_key=_get_api_key())
 
     available = ", ".join(sorted(ACTION_MAP.keys())) + \
                 ", volume_set, type_text, press_key, reload_n"
 
     prompt = f"""You are an intent detector for a computer control assistant.
+
 The user issued a command (possibly in any language): "{description}"
+
 Available actions: {available}
-Return ONLY a valid JSON object: {{"action": "action_name", "value": null_or_value}}
+
+Return ONLY a valid JSON object:
+{{"action": "action_name", "value": null_or_value}}
+
 Rules:
+- Pick the single best matching action from the available list.
 - For volume_set: value is an integer 0-100.
 - For type_text: value is the exact text to type.
 - For press_key: value is the key name (e.g. "f5", "tab", "enter").
-- For reload_n: value is an integer.
+- For reload_n: value is an integer (number of times to reload).
+- If no clear match, pick the closest action.
 - Return ONLY the JSON, no explanation, no markdown."""
 
     try:
-        raw  = client.chat_json(prompt, system="Return only valid JSON. No extra text.")
-        return raw
+        resp = _client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
+        text = re.sub(r"```(?:json)?", "", resp.text).strip().rstrip("`").strip()
+        return json.loads(text)
     except Exception as e:
         print(f"[Settings] Intent detection failed: {e}")
         return {"action": description.lower().replace(" ", "_"), "value": None}
-    
+
 def computer_settings(
     parameters: dict = None,
     response=None,

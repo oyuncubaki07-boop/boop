@@ -1,0 +1,8 @@
+{
+    "name": "skillspector",
+    "description": "Infinity evrim: NVIDIA/SkillSpector",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}

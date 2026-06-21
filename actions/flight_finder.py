@@ -17,6 +17,11 @@ def _get_base_dir() -> Path:
 BASE_DIR        = _get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
 
+
+def _get_api_key() -> str:
+    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)["gemini_api_key"]
+
 _MONTH_MAP: dict[str, int] = {
 
     "january": 1, "february": 2, "march": 3,     "april": 4,
@@ -55,20 +60,24 @@ def _parse_date(raw: str) -> str:
     for key, val in relative.items():
         if key in lower:
             return val.strftime("%Y-%m-%d")
-# replace the try/except genai block with:
+
     try:
-        from or_client import client
-        result = client.chat(
-            f"Today is {today.strftime('%Y-%m-%d')}. "
-            f"Convert this date expression to YYYY-MM-DD: '{raw}'. "
-            f"Return ONLY the date string, nothing else.",
-            system="You are a date converter. Return only the YYYY-MM-DD string."
+        from google import genai as _genai
+        _client  = _genai.Client(api_key=_get_api_key())
+        response = _client.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=(
+                f"Today is {today.strftime('%Y-%m-%d')}. "
+                f"Convert this date expression to YYYY-MM-DD: '{raw}'. "
+                f"Return ONLY the date string, nothing else."
+            )
         )
-        result = result.strip()
+        result = response.text.strip()
         if re.match(r"\d{4}-\d{2}-\d{2}", result):
             return result
     except Exception as e:
-        print(f"[FlightFinder] ⚠️ date parse failed: {e}")
+        print(f"[FlightFinder] ⚠️ Gemini date parse failed: {e}")
+
     for month_name, month_num in _MONTH_MAP.items():
         if month_name in lower:
             day_match = re.search(r"\d{1,2}", raw)
@@ -88,6 +97,7 @@ _CABIN_CODE: dict[str, str] = {
     "first":    "4",
 }
 
+
 def _build_google_flights_url(
     origin:      str,
     destination: str,
@@ -96,25 +106,25 @@ def _build_google_flights_url(
     passengers:  int        = 1,
     cabin:       str        = "economy",
 ) -> str:
-    from urllib.parse import quote_plus
-
     cabin_code = _CABIN_CODE.get(cabin.lower(), "1")
+    base       = "https://www.google.com/travel/flights"
 
-    origin_enc      = quote_plus(origin)
-    destination_enc = quote_plus(destination)
-
+    # Google Flights accepts these query params for pre-filling
     if return_date:
-        trip = f"Flights+from+{origin_enc}+to+{destination_enc}+on+{date}+returning+{return_date}"
+        trip = f"Flights+from+{origin}+to+{destination}+on+{date}+returning+{return_date}"
     else:
-        trip = f"Flights+from+{origin_enc}+to+{destination_enc}+on+{date}"
+        trip = f"Flights+from+{origin}+to+{destination}+on+{date}"
 
     return (
-        f"https://www.google.com/travel/flights"
+        f"{base}"
         f"?q={trip}"
+        f"&tfs=CBwQAhoeEgoyMDI1LTAzLTE1agcIARIDSVNUcgcIARIDTEhS"   
         f"&curr=USD"
         f"&cabin={cabin_code}"
         f"&adults={passengers}"
     )
+
+
 
 def _search_flights_browser(
     origin:      str,
@@ -137,15 +147,18 @@ def _search_flights_browser(
 
     raw = browser_control({"action": "get_text"})
     return (raw or ""), url
+
 def _parse_flights_with_gemini(
     raw_text:    str,
     origin:      str,
     destination: str,
     date:        str,
 ) -> list[dict]:
-    from or_client import client
+    from google import genai as _genai
+    from google.genai import types
 
-    prompt = (
+    _client = _genai.Client(api_key=_get_api_key())
+    prompt  = (
         f"Extract flight options from {origin} to {destination} on {date} "
         f"from this Google Flights page text:\n\n{raw_text[:12000]}\n\n"
         f"Return a JSON array of up to 5 flights:\n"
@@ -155,10 +168,22 @@ def _parse_flights_with_gemini(
     )
 
     try:
-        result = client.chat_json(prompt, system="Return only valid JSON. No extra text.")
-        return result if isinstance(result, list) else []
+        response = _client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=(
+                    "You are a flight data extraction expert. "
+                    "Extract flight information from raw webpage text. "
+                    "Return ONLY valid JSON — no markdown, no explanation."
+                )
+            ),
+        )
+        text     = re.sub(r"```(?:json)?", "", response.text).strip().rstrip("`").strip()
+        flights  = json.loads(text)
+        return flights if isinstance(flights, list) else []
     except Exception as e:
-        print(f"[FlightFinder] ⚠️ parse failed: {e}")
+        print(f"[FlightFinder] ⚠️ Gemini parse failed: {e}")
         return []
 
 def _format_spoken(
