@@ -374,7 +374,15 @@ class _BrowserSession:
         self._ready.wait(timeout=20)
 
     def _run_loop(self):
-        self._loop = asyncio.new_event_loop()
+        import sys
+        if sys.platform == "win32":
+            try:
+                self._loop = asyncio.ProactorEventLoop()
+            except AttributeError:
+                from asyncio import windows_events
+                self._loop = windows_events.ProactorEventLoop()
+        else:
+            self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
         self._loop.run_until_complete(self._async_init())
         self._ready.set()
